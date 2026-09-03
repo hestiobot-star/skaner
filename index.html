@@ -1,673 +1,736 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Skaner rejestracji</title>
-  <script async src="https://docs.opencv.org/4.13.0/opencv.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #0b0d10;
-      color: #e0e0e0;
-      font-family: 'Segoe UI', Roboto, Arial, sans-serif;
-      padding: 16px;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    .container { max-width: 720px; width: 100%; }
-    h1 {
-      font-size: 28px;
-      font-weight: 300;
-      letter-spacing: 1px;
-      margin: 8px 0 4px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      justify-content: center;
-    }
-    h1 span { background: #1f2937; padding: 0 14px; border-radius: 30px; font-size: 16px; font-weight: 400; }
-    .sub { color: #9ca3af; font-size: 14px; margin-bottom: 18px; text-align: center; }
-    #modeLabel {
-      display: inline-block;
-      padding: 6px 20px;
-      border-radius: 40px;
-      background: #1a2a2a;
-      color: #4ade80;
-      font-weight: 600;
-      font-size: 15px;
-      margin-bottom: 12px;
-      border: 1px solid #2d4a3a;
-    }
-    .camera-box {
-      position: relative;
-      width: 100%;
-      background: #000;
-      border-radius: 20px;
-      overflow: hidden;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.8);
-      aspect-ratio: 16/9;
-    }
-    #video {
-      width: 100%;
-      display: block;
-      background: #111;
-      aspect-ratio: 16/9;
-      object-fit: cover;
-    }
-    #scanFrame {
-      position: absolute;
-      left: 6%;
-      width: 88%;
-      top: 20%;
-      height: 60%;
-      border: 2.5px solid #4ade80;
-      border-radius: 12px;
-      box-shadow: 0 0 25px rgba(74, 222, 128, 0.4), inset 0 0 20px rgba(74,222,128,0.1);
-      pointer-events: none;
-      transition: all 0.3s ease;
-    }
-    .corner {
-      position: absolute;
-      width: 22px;
-      height: 22px;
-      border-color: #fff;
-      border-style: solid;
-    }
-    .corner.tl { top: -3px; left: -3px; border-width: 4px 0 0 4px; }
-    .corner.tr { top: -3px; right: -3px; border-width: 4px 4px 0 0; }
-    .corner.bl { bottom: -3px; left: -3px; border-width: 0 0 4px 4px; }
-    .corner.br { bottom: -3px; right: -3px; border-width: 0 4px 4px 0; }
-    #scanLine {
-      position: absolute;
-      left: 7%;
-      width: 86%;
-      height: 2px;
-      background: #4ade80;
-      box-shadow: 0 0 12px #4ade80;
-      top: 22%;
-      animation: scan 2.2s ease-in-out infinite;
-      pointer-events: none;
-      border-radius: 2px;
-    }
-    @keyframes scan {
-      0% { top: 22%; }
-      50% { top: 78%; }
-      100% { top: 22%; }
-    }
-    #status {
-      min-height: 28px;
-      margin: 16px 0 12px;
-      font-size: 15px;
-      color: #fcd34d;
-      text-align: center;
-      font-weight: 500;
-    }
-    .btn-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      justify-content: center;
-      margin: 8px 0 16px;
-    }
-    button {
-      border: none;
-      border-radius: 50px;
-      padding: 12px 24px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      color: #fff;
-      background: #374151;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      flex: 1 1 auto;
-      min-width: 110px;
-    }
-    button:disabled { opacity: 0.4; cursor: default; transform: none; box-shadow: none; }
-    button:active:not(:disabled) { transform: scale(0.96); }
-    #startBtn { background: #16a34a; }
-    #scanBtn { background: #2563eb; }
-    #nextBtn { background: #d97706; display: none; }
-    #resetBtn { background: #6b7280; }
-    .results {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin: 12px 0;
-    }
-    .card {
-      background: #181b20;
-      border: 1px solid #2a2f36;
-      border-radius: 16px;
-      padding: 16px 18px;
-      text-align: left;
-      transition: border-color 0.3s;
-    }
-    .card .title {
-      color: #9ca3af;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-    .card .value {
-      font-size: 26px;
-      font-weight: 700;
-      color: #4ade80;
-      letter-spacing: 1.5px;
-      word-break: break-all;
-      min-height: 40px;
-    }
-    .card .value.placeholder { color: #6b7280; font-weight: 300; }
-    #engineStatus {
-      margin-top: 10px;
-      color: #6b7280;
-      font-size: 12px;
-      text-align: center;
-    }
-    canvas { display: none; }
-    @media (max-width: 550px) {
-      .results { grid-template-columns: 1fr; }
-      button { min-width: 80px; padding: 12px 16px; font-size: 14px; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Skaner Rejestracji</title>
+    <!-- OpenCV.js -->
+    <script async src="https://docs.opencv.org/4.13.0/opencv.js"></script>
+    <!-- Tesseract.js -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        /* --- STYLE (pozostawiamy bez większych zmian) --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background: #0b0d10;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+            padding: 16px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 720px;
+            width: 100%;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 300;
+            letter-spacing: 1px;
+            margin: 8px 0 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: center;
+        }
+        h1 span {
+            background: #1f2937;
+            padding: 0 14px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 400;
+        }
+        .sub {
+            color: #9ca3af;
+            font-size: 14px;
+            margin-bottom: 18px;
+            text-align: center;
+        }
+        #modeLabel {
+            display: inline-block;
+            padding: 6px 20px;
+            border-radius: 40px;
+            background: #1a2a2a;
+            color: #4ade80;
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 12px;
+            border: 1px solid #2d4a3a;
+        }
+        .camera-box {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.8);
+            aspect-ratio: 16/9;
+        }
+        #video {
+            width: 100%;
+            display: block;
+            background: #111;
+            aspect-ratio: 16/9;
+            object-fit: cover;
+        }
+        #scanFrame {
+            position: absolute;
+            left: 6%;
+            width: 88%;
+            top: 20%;
+            height: 60%;
+            border: 2.5px solid #4ade80;
+            border-radius: 12px;
+            box-shadow: 0 0 25px rgba(74, 222, 128, 0.4), inset 0 0 20px rgba(74, 222, 128, 0.1);
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+        .corner {
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            border-color: #fff;
+            border-style: solid;
+        }
+        .corner.tl {
+            top: -3px;
+            left: -3px;
+            border-width: 4px 0 0 4px;
+        }
+        .corner.tr {
+            top: -3px;
+            right: -3px;
+            border-width: 4px 4px 0 0;
+        }
+        .corner.bl {
+            bottom: -3px;
+            left: -3px;
+            border-width: 0 0 4px 4px;
+        }
+        .corner.br {
+            bottom: -3px;
+            right: -3px;
+            border-width: 0 4px 4px 0;
+        }
+        #scanLine {
+            position: absolute;
+            left: 7%;
+            width: 86%;
+            height: 2px;
+            background: #4ade80;
+            box-shadow: 0 0 12px #4ade80;
+            top: 22%;
+            animation: scan 2.2s ease-in-out infinite;
+            pointer-events: none;
+            border-radius: 2px;
+        }
+        @keyframes scan {
+            0% {
+                top: 22%;
+            }
+            50% {
+                top: 78%;
+            }
+            100% {
+                top: 22%;
+            }
+        }
+        #status {
+            min-height: 28px;
+            margin: 16px 0 12px;
+            font-size: 15px;
+            color: #fcd34d;
+            text-align: center;
+            font-weight: 500;
+        }
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin: 8px 0 16px;
+        }
+        button {
+            border: none;
+            border-radius: 50px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #fff;
+            background: #374151;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            flex: 1 1 auto;
+            min-width: 110px;
+        }
+        button:disabled {
+            opacity: 0.4;
+            cursor: default;
+            transform: none;
+            box-shadow: none;
+        }
+        button:active:not(:disabled) {
+            transform: scale(0.96);
+        }
+        #startBtn {
+            background: #16a34a;
+        }
+        #scanBtn {
+            background: #2563eb;
+        }
+        #nextBtn {
+            background: #d97706;
+            display: none;
+        }
+        #resetBtn {
+            background: #6b7280;
+        }
+        .results {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin: 12px 0;
+        }
+        .card {
+            background: #181b20;
+            border: 1px solid #2a2f36;
+            border-radius: 16px;
+            padding: 16px 18px;
+            text-align: left;
+            transition: border-color 0.3s;
+        }
+        .card .title {
+            color: #9ca3af;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .card .value {
+            font-size: 26px;
+            font-weight: 700;
+            color: #4ade80;
+            letter-spacing: 1.5px;
+            word-break: break-all;
+            min-height: 40px;
+        }
+        .card .value.placeholder {
+            color: #6b7280;
+            font-weight: 300;
+        }
+        #engineStatus {
+            margin-top: 10px;
+            color: #6b7280;
+            font-size: 12px;
+            text-align: center;
+        }
+        canvas {
+            display: none;
+        }
+        @media (max-width: 550px) {
+            .results {
+                grid-template-columns: 1fr;
+            }
+            button {
+                min-width: 80px;
+                padding: 12px 16px;
+                font-size: 14px;
+            }
+        }
+    </style>
 </head>
 <body>
-<div class="container">
-  <h1>🚗 Skaner <span>rejestracji</span></h1>
-  <div class="sub">Zeskanuj numer rejestracyjny, następnie VIN</div>
-  <div id="modeLabel">ETAP 1 — NUMER REJESTRACYJNY</div>
-  <div class="camera-box">
-    <video id="video" autoplay muted playsinline></video>
-    <div id="scanFrame">
-      <div class="corner tl"></div>
-      <div class="corner tr"></div>
-      <div class="corner bl"></div>
-      <div class="corner br"></div>
+    <div class="container">
+        <h1>🚗 Skaner <span>rejestracji</span></h1>
+        <div class="sub">Zeskanuj numer rejestracyjny, następnie VIN</div>
+        <div id="modeLabel">ETAP 1 — NUMER REJESTRACYJNY</div>
+        <div class="camera-box">
+            <video id="video" autoplay muted playsinline></video>
+            <div id="scanFrame">
+                <div class="corner tl"></div>
+                <div class="corner tr"></div>
+                <div class="corner bl"></div>
+                <div class="corner br"></div>
+            </div>
+            <div id="scanLine"></div>
+        </div>
+        <div id="status">Naciśnij „Uruchom kamerę”</div>
+        <div class="btn-group">
+            <button id="startBtn">📷 Kamera</button>
+            <button id="scanBtn" disabled>🔍 Skanuj</button>
+            <button id="nextBtn">➡️ VIN</button>
+            <button id="resetBtn">↺ Reset</button>
+        </div>
+        <div class="results">
+            <div class="card">
+                <div class="title">Numer rejestracyjny</div>
+                <div class="value placeholder" id="regValue">—</div>
+            </div>
+            <div class="card">
+                <div class="title">VIN</div>
+                <div class="value placeholder" id="vinValue">—</div>
+            </div>
+        </div>
+        <div id="engineStatus">Inicjalizacja silników...</div>
     </div>
-    <div id="scanLine"></div>
-  </div>
-  <div id="status">Naciśnij „Uruchom kamerę”</div>
-  <div class="btn-group">
-    <button id="startBtn">📷 Kamera</button>
-    <button id="scanBtn" disabled>🔍 Skanuj</button>
-    <button id="nextBtn">➡️ VIN</button>
-    <button id="resetBtn">↺ Reset</button>
-  </div>
-  <div class="results">
-    <div class="card">
-      <div class="title">Numer rejestracyjny</div>
-      <div class="value placeholder" id="regValue">—</div>
-    </div>
-    <div class="card">
-      <div class="title">VIN</div>
-      <div class="value placeholder" id="vinValue">—</div>
-    </div>
-  </div>
-  <div id="engineStatus">Inicjalizacja silników...</div>
-</div>
 
-<canvas id="captureCanvas"></canvas>
-<canvas id="procCanvas"></canvas>
+    <canvas id="captureCanvas"></canvas>
+    <canvas id="procCanvas"></canvas>
 
-<script>
-// ============================================================
-// ELEMENTY
-// ============================================================
-const video = document.getElementById('video');
-const statusEl = document.getElementById('status');
-const engineEl = document.getElementById('engineStatus');
-const modeLabel = document.getElementById('modeLabel');
-const regValue = document.getElementById('regValue');
-const vinValue = document.getElementById('vinValue');
-const startBtn = document.getElementById('startBtn');
-const scanBtn = document.getElementById('scanBtn');
-const nextBtn = document.getElementById('nextBtn');
-const resetBtn = document.getElementById('resetBtn');
-const scanFrame = document.getElementById('scanFrame');
-const captureCanvas = document.getElementById('captureCanvas');
-const procCanvas = document.getElementById('procCanvas');
-const capCtx = captureCanvas.getContext('2d');
-const procCtx = procCanvas.getContext('2d');
+    <script>
+        // ============================================================
+        // 1. ELEMENTY I STAN
+        // ============================================================
+        const video = document.getElementById('video');
+        const statusEl = document.getElementById('status');
+        const engineEl = document.getElementById('engineStatus');
+        const modeLabel = document.getElementById('modeLabel');
+        const regValue = document.getElementById('regValue');
+        const vinValue = document.getElementById('vinValue');
+        const startBtn = document.getElementById('startBtn');
+        const scanBtn = document.getElementById('scanBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const scanFrame = document.getElementById('scanFrame');
+        const captureCanvas = document.getElementById('captureCanvas');
+        const procCanvas = document.getElementById('procCanvas');
+        const capCtx = captureCanvas.getContext('2d');
+        const procCtx = procCanvas.getContext('2d');
 
-// ============================================================
-// STAN
-// ============================================================
-let cameraReady = false;
-let ocrReady = false;
-let cvReady = false;
-let processing = false;
-let mode = 'REGISTRATION';
-let stream = null;
-let worker = null;
+        let cameraReady = false;
+        let ocrReady = false;
+        let cvReady = false;
+        let processing = false;
+        let mode = 'REGISTRATION';
+        let stream = null;
+        let worker = null;
 
-// ============================================================
-// OPENCV
-// ============================================================
-async function waitForOpenCV() {
-  try {
-    if (typeof cv === 'undefined') {
-      await new Promise(resolve => {
-        const check = setInterval(() => {
-          if (typeof cv !== 'undefined') { clearInterval(check); resolve(); }
-        }, 100);
-      });
-    }
-    if (cv instanceof Promise) cv = await cv;
-    cvReady = true;
-    engineEl.innerText = 'OpenCV.js: gotowy';
-    console.log('OpenCV ready');
-  } catch (e) {
-    console.error('OpenCV init error', e);
-    engineEl.innerText = 'OpenCV.js: błąd';
-  }
-}
-
-// ============================================================
-// TESSERACT
-// ============================================================
-async function initOCR() {
-  try {
-    statusEl.innerText = 'Ładowanie OCR...';
-    worker = await Tesseract.createWorker('eng', 1, {
-      logger: m => console.log('Tesseract:', m)
-    });
-    await worker.setParameters({
-      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-      tessedit_pageseg_mode: '6'  // blok tekstu – lepszy dla tablic
-    });
-    ocrReady = true;
-    engineEl.innerText = 'OpenCV + Tesseract: GOTOWE';
-    statusEl.innerText = 'Gotowe. Ustaw tablicę w ramce.';
-    if (cameraReady) scanBtn.disabled = false;
-  } catch (e) {
-    console.error('OCR init error', e);
-    statusEl.innerText = 'Błąd OCR';
-  }
-}
-
-// ============================================================
-// KAMERA
-// ============================================================
-async function startCamera() {
-  if (cameraReady) return;
-  try {
-    statusEl.innerText = 'Uruchamianie kamery...';
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'environment',
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        aspectRatio: 16/9
-      },
-      audio: false
-    });
-    video.srcObject = stream;
-    await video.play();
-    cameraReady = true;
-    startBtn.style.display = 'none';
-    statusEl.innerText = 'Kamera gotowa.';
-    if (ocrReady) scanBtn.disabled = false;
-  } catch (e) {
-    console.error('Camera error', e);
-    statusEl.innerText = 'Błąd kamery. Sprawdź uprawnienia.';
-    alert('Brak dostępu do kamery.');
-  }
-}
-
-// ============================================================
-// POBRANIE KLATKI Z RAMKI (większy obszar)
-// ============================================================
-function captureFrameFromVideo() {
-  const vw = video.videoWidth, vh = video.videoHeight;
-  if (!vw || !vh) return null;
-
-  // obszar: 20% – 80% wysokości, 6% – 94% szerokości
-  const sx = Math.floor(vw * 0.06);
-  const sy = Math.floor(vh * 0.20);
-  const sw = Math.floor(vw * 0.88);
-  const sh = Math.floor(vh * 0.60);
-
-  // docelowa szerokość (większa = lepsza)
-  const targetW = 2000;
-  const scale = targetW / sw;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(sw * scale);
-  canvas.height = Math.round(sh * scale);
-  const ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-  return canvas;
-}
-
-// ============================================================
-// OCENA OSTROŚCI (wariancja Laplace'a)
-// ============================================================
-function sharpnessScore(canvas) {
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
-  const imageData = ctx.getImageData(0, 0, w, h);
-  const data = imageData.data;
-  let sum = 0, n = 0;
-  for (let y = 1; y < h-1; y++) {
-    for (let x = 1; x < w-1; x++) {
-      const idx = (y * w + x) * 4;
-      const g = 0.299 * data[idx] + 0.587 * data[idx+1] + 0.114 * data[idx+2];
-      const gx = 0.299 * data[idx+4] + 0.587 * data[idx+5] + 0.114 * data[idx+6] - g;
-      const gy = 0.299 * data[idx+4*w] + 0.587 * data[idx+4*w+1] + 0.114 * data[idx+4*w+2] - g;
-      sum += gx*gx + gy*gy;
-      n++;
-    }
-  }
-  return n ? sum / n : 0;
-}
-
-// ============================================================
-// PRZETWARZANIE OPENCV – 3 warianty
-// ============================================================
-function preprocessWithCV(srcCanvas, variant) {
-  let src = null, gray = null, result = null, clahe = null;
-  try {
-    src = cv.imread(srcCanvas);
-    gray = new cv.Mat();
-    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
-    if (variant === 'ADAPTIVE') {
-      result = new cv.Mat();
-      cv.adaptiveThreshold(gray, result, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 10);
-    } else if (variant === 'OTSU') {
-      result = new cv.Mat();
-      cv.threshold(gray, result, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
-    } else if (variant === 'CLAHE') {
-      clahe = new cv.CLAHE(2.5, new cv.Size(8,8));
-      result = new cv.Mat();
-      clahe.apply(gray, result);
-      // dodatkowo binaryzacja OTSU po CLAHE
-      const tmp = new cv.Mat();
-      cv.threshold(result, tmp, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
-      result.delete();
-      result = tmp;
-    } else {
-      // fallback – bez przetwarzania (tylko szary)
-      result = gray.clone();
-    }
-
-    procCanvas.width = result.cols;
-    procCanvas.height = result.rows;
-    cv.imshow(procCanvas, result);
-    const out = document.createElement('canvas');
-    out.width = result.cols;
-    out.height = result.rows;
-    out.getContext('2d').drawImage(procCanvas, 0, 0);
-    return out;
-  } finally {
-    if (src) src.delete();
-    if (gray) gray.delete();
-    if (clahe) clahe.delete();
-    if (result) result.delete();
-  }
-}
-
-// ============================================================
-// OCR NA POJEDYNCZYM OBRAZIE
-// ============================================================
-async function recognizePlate(canvas) {
-  const result = await worker.recognize(canvas);
-  const text = result?.data?.text || '';
-  const confidence = Number(result?.data?.confidence || 0);
-  return { raw: text, cleaned: cleanText(text), confidence };
-}
-
-function cleanText(t) {
-  return t.toUpperCase().replace(/[^A-Z0-9]/g, '');
-}
-
-// ============================================================
-// KOREKCJA NUMERU REJESTRACYJNEGO
-// ============================================================
-function correctPlate(s) {
-  if (!s || s.length < 4) return null;
-  let v = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (v.length < 4 || v.length > 8) return null;
-
-  let candidates = [];
-  for (let prefLen = 1; prefLen <= Math.min(3, v.length-3); prefLen++) {
-    let pref = v.substring(0, prefLen);
-    let rest = v.substring(prefLen);
-    pref = pref.replace(/0/g, 'O').replace(/1/g, 'I').replace(/2/g, 'Z').replace(/5/g, 'S');
-    rest = rest.replace(/O/g, '0').replace(/I/g, '1').replace(/Z/g, '2').replace(/S/g, '5').replace(/B/g, '8');
-    if (/^[A-Z]{1,3}$/.test(pref) && /^[0-9]{3,5}$/.test(rest)) {
-      candidates.push(pref + rest);
-    }
-  }
-  if (candidates.length === 0) return null;
-  const score = (c) => {
-    const p = c.match(/^[A-Z]+/)[0].length;
-    const n = c.length - p;
-    if (p === 2 && n === 5) return 100;
-    if (p === 2 && n === 4) return 90;
-    if (p === 3 && n === 4) return 80;
-    if (p === 2 && n === 3) return 70;
-    if (p === 1 && n === 5) return 60;
-    return 50;
-  };
-  candidates.sort((a,b) => score(b) - score(a));
-  return candidates[0];
-}
-
-function formatPlate(v) {
-  if (!v) return null;
-  const pref = v.match(/^[A-Z]+/)[0];
-  const rest = v.substring(pref.length);
-  return pref + ' ' + rest;
-}
-
-// ============================================================
-// KOREKCJA VIN
-// ============================================================
-function correctVIN(s) {
-  let v = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (v.length === 18) {
-    for (let i=0; i<v.length; i++) {
-      const cand = v.substring(0,i) + v.substring(i+1);
-      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(cand)) { v = cand; break; }
-    }
-  }
-  v = v.replace(/O/g,'0').replace(/I/g,'1').replace(/Q/g,'0');
-  if (/^[A-HJ-NPR-Z0-9]{17}$/.test(v)) return v;
-  return null;
-}
-
-// ============================================================
-// SKANOWANIE WIELU KLATEK – Z WIELOMA WARIANTAMI
-// ============================================================
-async function scanMultipleFrames() {
-  if (processing || !cameraReady || !ocrReady) return;
-  processing = true;
-  scanBtn.disabled = true;
-  statusEl.innerText = 'Zbieranie klatek...';
-
-  try {
-    // Zbierz 15 klatek
-    const frames = [];
-    for (let i=0; i<15; i++) {
-      const c = captureFrameFromVideo();
-      if (c) {
-        const score = sharpnessScore(c);
-        frames.push({ canvas: c, score });
-      }
-      await new Promise(r => setTimeout(r, 200));
-    }
-    if (frames.length === 0) { statusEl.innerText = 'Nie udało się pobrać klatek.'; return; }
-
-    // Wybierz 5 najlepszych (najostrzejszych)
-    frames.sort((a,b) => b.score - a.score);
-    const topFrames = frames.slice(0, 5);
-
-    statusEl.innerText = 'Analizowanie (3 warianty)...';
-    const allResults = [];
-
-    for (const f of topFrames) {
-      const variants = [];
-      if (cvReady) {
-        variants.push('ADAPTIVE', 'OTSU', 'CLAHE');
-      } else {
-        variants.push('RAW'); // tylko oryginał
-      }
-      for (const v of variants) {
-        let processed;
-        if (cvReady && v !== 'RAW') {
-          processed = preprocessWithCV(f.canvas, v);
-        } else {
-          processed = f.canvas; // używamy oryginału
+        // ============================================================
+        // 2. INICJALIZACJA OPENCV
+        // ============================================================
+        async function waitForOpenCV() {
+            try {
+                if (typeof cv === 'undefined') {
+                    await new Promise(resolve => {
+                        const check = setInterval(() => {
+                            if (typeof cv !== 'undefined') { clearInterval(check);
+                                resolve(); }
+                        }, 100);
+                    });
+                }
+                if (cv instanceof Promise) cv = await cv;
+                cvReady = true;
+                engineEl.innerText = 'OpenCV.js: gotowy';
+                console.log('OpenCV ready');
+            } catch (e) {
+                console.error('OpenCV init error', e);
+                engineEl.innerText = 'OpenCV.js: błąd';
+            }
         }
-        const ocrResult = await recognizePlate(processed);
-        allResults.push({ ...ocrResult, variant: v, sharpness: f.score });
-      }
-    }
 
-    // Wybierz najlepszy wynik dla rejestracji lub VIN
-    if (mode === 'REGISTRATION') {
-      const best = selectBestPlate(allResults);
-      if (best) {
-        regValue.textContent = formatPlate(best);
-        regValue.className = 'value';
-        statusEl.textContent = '✓ Odczytano: ' + formatPlate(best);
-        nextBtn.style.display = 'inline-block';
-        scanBtn.style.display = 'none';
-      } else {
-        statusEl.textContent = 'Nie rozpoznano tablicy. Spróbuj ponownie.';
-        regValue.textContent = '—';
-        regValue.className = 'value placeholder';
-      }
-    } else {
-      const best = selectBestVIN(allResults);
-      if (best) {
-        vinValue.textContent = best;
-        vinValue.className = 'value';
-        statusEl.textContent = '✓ VIN odczytany: ' + best;
-        scanBtn.style.display = 'none';
-        nextBtn.style.display = 'none';
-      } else {
-        statusEl.textContent = 'Nie rozpoznano VIN. Spróbuj ponownie.';
-        vinValue.textContent = '—';
-        vinValue.className = 'value placeholder';
-      }
-    }
-  } catch (e) {
-    console.error('Scan error', e);
-    statusEl.textContent = 'Błąd skanowania.';
-  } finally {
-    processing = false;
-    if (mode === 'REGISTRATION') scanBtn.disabled = false;
-    else scanBtn.disabled = false;
-  }
-}
+        // ============================================================
+        // 3. INICJALIZACJA TESSERACT (Z POPRAWIONYMI PARAMETRAMI)
+        // ============================================================
+        async function initOCR() {
+            try {
+                statusEl.innerText = 'Ładowanie OCR...';
+                worker = await Tesseract.createWorker('eng', 1, {
+                    logger: m => console.log('Tesseract:', m)
+                });
 
-function selectBestPlate(results) {
-  const candidates = [];
-  for (const r of results) {
-    const corrected = correctPlate(r.cleaned);
-    if (!corrected) continue;
-    let score = r.confidence || 0;
-    // premia za format
-    const p = corrected.match(/^[A-Z]+/)[0].length;
-    const n = corrected.length - p;
-    if (p === 2 && n === 5) score += 40;
-    else if (p === 2 && n === 4) score += 30;
-    else if (p === 3 && n === 4) score += 25;
-    else if (p === 2 && n === 3) score += 20;
-    else if (p === 1 && n === 5) score += 10;
-    // niewielka premia za ostrość
-    score += (r.sharpness || 0) * 0.001;
-    candidates.push({ value: corrected, score });
-  }
-  if (candidates.length === 0) return null;
-  candidates.sort((a,b) => b.score - a.score);
-  return candidates[0].value;
-}
+                // *** KLUCZOWA POPRAWKA: PARAMETRY DLA TABLIC ***
+                await worker.setParameters({
+                    // 1. BIAŁA LISTA ZNAKÓW: tylko to, co może być na tablicy
+                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+                    // 2. TRYB SEGMENTACJI STRONY: 7 = pojedynczy wiersz tekstu
+                    tessedit_pageseg_mode: '7',
+                    // 3. WYŁĄCZ DZIELENIE WYRAZÓW
+                    preserve_interword_spaces: '0'
+                });
 
-function selectBestVIN(results) {
-  const candidates = [];
-  for (const r of results) {
-    const corrected = correctVIN(r.cleaned);
-    if (!corrected) continue;
-    let score = r.confidence || 0;
-    score += 50;
-    candidates.push({ value: corrected, score });
-  }
-  if (candidates.length === 0) return null;
-  candidates.sort((a,b) => b.score - a.score);
-  return candidates[0].value;
-}
+                ocrReady = true;
+                engineEl.innerText = 'OpenCV + Tesseract: GOTOWE';
+                statusEl.innerText = 'Gotowe. Ustaw tablicę w ramce.';
+                if (cameraReady) scanBtn.disabled = false;
+            } catch (e) {
+                console.error('OCR init error', e);
+                statusEl.innerText = 'Błąd OCR';
+            }
+        }
 
-// ============================================================
-// PRZEŁĄCZANIE TRYBÓW
-// ============================================================
-function switchToVIN() {
-  mode = 'VIN';
-  modeLabel.textContent = 'ETAP 2 — NUMER VIN';
-  modeLabel.style.background = '#1e293b';
-  modeLabel.style.color = '#60a5fa';
-  scanFrame.style.top = '18%';
-  scanFrame.style.height = '64%';
-  statusEl.textContent = 'Ustaw VIN w ramce.';
-  nextBtn.style.display = 'none';
-  scanBtn.style.display = 'inline-block';
-  scanBtn.disabled = false;
-}
+        // ============================================================
+        // 4. KAMERA
+        // ============================================================
+        async function startCamera() {
+            if (cameraReady) return;
+            try {
+                statusEl.innerText = 'Uruchamianie kamery...';
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                        aspectRatio: 16 / 9
+                    },
+                    audio: false
+                });
+                video.srcObject = stream;
+                await video.play();
+                cameraReady = true;
+                startBtn.style.display = 'none';
+                statusEl.innerText = 'Kamera gotowa.';
+                if (ocrReady) scanBtn.disabled = false;
+            } catch (e) {
+                console.error('Camera error', e);
+                statusEl.innerText = 'Błąd kamery. Sprawdź uprawnienia.';
+                alert('Brak dostępu do kamery.');
+            }
+        }
 
-function resetAll() {
-  mode = 'REGISTRATION';
-  modeLabel.textContent = 'ETAP 1 — NUMER REJESTRACYJNY';
-  modeLabel.style.background = '#1a2a2a';
-  modeLabel.style.color = '#4ade80';
-  scanFrame.style.top = '20%';
-  scanFrame.style.height = '60%';
-  regValue.textContent = '—';
-  regValue.className = 'value placeholder';
-  vinValue.textContent = '—';
-  vinValue.className = 'value placeholder';
-  nextBtn.style.display = 'none';
-  scanBtn.style.display = 'inline-block';
-  if (cameraReady && ocrReady) scanBtn.disabled = false;
-  else scanBtn.disabled = true;
-  statusEl.textContent = 'Gotowy. Ustaw tablicę w ramce.';
-}
+        // ============================================================
+        // 5. POBRANIE KLATKI Z RAMKI (WIĘKSZY OBSZAR)
+        // ============================================================
+        function captureFrameFromVideo() {
+            const vw = video.videoWidth,
+                vh = video.videoHeight;
+            if (!vw || !vh) return null;
 
-// ============================================================
-// PRZYCISKI
-// ============================================================
-startBtn.addEventListener('click', async () => {
-  await startCamera();
-  if (!ocrReady) {
-    await waitForOpenCV();
-    await initOCR();
-  }
-});
-scanBtn.addEventListener('click', scanMultipleFrames);
-nextBtn.addEventListener('click', switchToVIN);
-resetBtn.addEventListener('click', resetAll);
+            // Obszar: 20% – 80% wysokości, 6% – 94% szerokości
+            const sx = Math.floor(vw * 0.06);
+            const sy = Math.floor(vh * 0.20);
+            const sw = Math.floor(vw * 0.88);
+            const sh = Math.floor(vh * 0.60);
 
-// ============================================================
-// START
-// ============================================================
-window.addEventListener('load', async () => {
-  await waitForOpenCV();
-  engineEl.textContent = cvReady ? 'OpenCV.js: gotowy — oczekuje kamera/OCR' : 'OpenCV.js: niedostępny';
-});
+            // Docelowa szerokość (większa = lepsza)
+            const targetW = 2400;
+            const scale = targetW / sw;
 
-window.addEventListener('beforeunload', async () => {
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  if (worker) try { await worker.terminate(); } catch(e) {}
-});
-</script>
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(sw * scale);
+            canvas.height = Math.round(sh * scale);
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+            return canvas;
+        }
+
+        // ============================================================
+        // 6. OCENA OSTROŚCI (WARIANCJA LAPLACE'A)
+        // ============================================================
+        function sharpnessScore(canvas) {
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width,
+                h = canvas.height;
+            const imageData = ctx.getImageData(0, 0, w, h);
+            const data = imageData.data;
+            let sum = 0,
+                n = 0;
+            for (let y = 1; y < h - 1; y++) {
+                for (let x = 1; x < w - 1; x++) {
+                    const idx = (y * w + x) * 4;
+                    const g = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+                    const gx = 0.299 * data[idx + 4] + 0.587 * data[idx + 5] + 0.114 * data[idx + 6] - g;
+                    const gy = 0.299 * data[idx + 4 * w] + 0.587 * data[idx + 4 * w + 1] + 0.114 * data[idx + 4 * w + 2] - g;
+                    sum += gx * gx + gy * gy;
+                    n++;
+                }
+            }
+            return n ? sum / n : 0;
+        }
+
+        // ============================================================
+        // 7. PRZETWARZANIE OPENCV – SPRAWDZONE METODY
+        // ============================================================
+        function preprocessWithCV(srcCanvas) {
+            let src = null,
+                gray = null,
+                clahe = null,
+                enhanced = null,
+                binary = null;
+            try {
+                src = cv.imread(srcCanvas);
+                gray = new cv.Mat();
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+                // Krok 1: CLAHE - wyrównanie kontrastu
+                clahe = new cv.CLAHE(2.5, new cv.Size(8, 8));
+                enhanced = new cv.Mat();
+                clahe.apply(gray, enhanced);
+
+                // Krok 2: Binaryzacja OTSU - automatyczne dobranie progu
+                binary = new cv.Mat();
+                cv.threshold(enhanced, binary, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
+
+                // Zapis do canvas
+                procCanvas.width = binary.cols;
+                procCanvas.height = binary.rows;
+                cv.imshow(procCanvas, binary);
+
+                const out = document.createElement('canvas');
+                out.width = binary.cols;
+                out.height = binary.rows;
+                out.getContext('2d').drawImage(procCanvas, 0, 0);
+                return out;
+            } finally {
+                if (src) src.delete();
+                if (gray) gray.delete();
+                if (clahe) clahe.delete();
+                if (enhanced) enhanced.delete();
+                if (binary) binary.delete();
+            }
+        }
+
+        // ============================================================
+        // 8. OCR NA POJEDYNCZYM OBRAZIE
+        // ============================================================
+        async function recognizePlate(canvas) {
+            const result = await worker.recognize(canvas);
+            const text = result?.data?.text || '';
+            const confidence = Number(result?.data?.confidence || 0);
+            return { raw: text, cleaned: cleanText(text), confidence };
+        }
+
+        function cleanText(t) {
+            return t.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        }
+
+        // ============================================================
+        // 9. KOREKTA NUMERU REJESTRACYJNEGO
+        // ============================================================
+        function correctPlate(s) {
+            if (!s || s.length < 4) return null;
+            let v = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            if (v.length < 4 || v.length > 8) return null;
+
+            let candidates = [];
+            for (let prefLen = 1; prefLen <= Math.min(3, v.length - 3); prefLen++) {
+                let pref = v.substring(0, prefLen);
+                let rest = v.substring(prefLen);
+                pref = pref.replace(/0/g, 'O').replace(/1/g, 'I').replace(/2/g, 'Z').replace(/5/g, 'S');
+                rest = rest.replace(/O/g, '0').replace(/I/g, '1').replace(/Z/g, '2').replace(/S/g, '5').replace(/B/g, '8');
+                if (/^[A-Z]{1,3}$/.test(pref) && /^[0-9]{3,5}$/.test(rest)) {
+                    candidates.push(pref + rest);
+                }
+            }
+            if (candidates.length === 0) return null;
+            const score = (c) => {
+                const p = c.match(/^[A-Z]+/)[0].length;
+                const n = c.length - p;
+                if (p === 2 && n === 5) return 100;
+                if (p === 2 && n === 4) return 90;
+                if (p === 3 && n === 4) return 80;
+                if (p === 2 && n === 3) return 70;
+                if (p === 1 && n === 5) return 60;
+                return 50;
+            };
+            candidates.sort((a, b) => score(b) - score(a));
+            return candidates[0];
+        }
+
+        function formatPlate(v) {
+            if (!v) return null;
+            const pref = v.match(/^[A-Z]+/)[0];
+            const rest = v.substring(pref.length);
+            return pref + ' ' + rest;
+        }
+
+        // ============================================================
+        // 10. KOREKTA VIN
+        // ============================================================
+        function correctVIN(s) {
+            let v = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            if (v.length === 18) {
+                for (let i = 0; i < v.length; i++) {
+                    const cand = v.substring(0, i) + v.substring(i + 1);
+                    if (/^[A-HJ-NPR-Z0-9]{17}$/.test(cand)) { v = cand; break; }
+                }
+            }
+            v = v.replace(/O/g, '0').replace(/I/g, '1').replace(/Q/g, '0');
+            if (/^[A-HJ-NPR-Z0-9]{17}$/.test(v)) return v;
+            return null;
+        }
+
+        // ============================================================
+        // 11. GŁÓWNA FUNKCJA SKANOWANIA
+        // ============================================================
+        async function scanMultipleFrames() {
+            if (processing || !cameraReady || !ocrReady) return;
+            processing = true;
+            scanBtn.disabled = true;
+            statusEl.innerText = 'Zbieranie klatek...';
+
+            try {
+                // Zbierz 20 klatek
+                const frames = [];
+                for (let i = 0; i < 20; i++) {
+                    const c = captureFrameFromVideo();
+                    if (c) {
+                        const score = sharpnessScore(c);
+                        frames.push({ canvas: c, score });
+                    }
+                    await new Promise(r => setTimeout(r, 150));
+                }
+                if (frames.length === 0) { statusEl.innerText = 'Nie udało się pobrać klatek.'; return; }
+
+                // Wybierz 5 najlepszych (najostrzejszych)
+                frames.sort((a, b) => b.score - a.score);
+                const topFrames = frames.slice(0, 5);
+
+                statusEl.innerText = 'Analizowanie...';
+                const allResults = [];
+
+                for (const f of topFrames) {
+                    let processed;
+                    if (cvReady) {
+                        processed = preprocessWithCV(f.canvas);
+                    } else {
+                        processed = f.canvas;
+                    }
+                    const ocrResult = await recognizePlate(processed);
+                    allResults.push({ ...ocrResult, sharpness: f.score });
+                }
+
+                // Wybierz najlepszy wynik
+                if (mode === 'REGISTRATION') {
+                    const best = selectBestPlate(allResults);
+                    if (best) {
+                        regValue.textContent = formatPlate(best);
+                        regValue.className = 'value';
+                        statusEl.textContent = '✓ Odczytano: ' + formatPlate(best);
+                        nextBtn.style.display = 'inline-block';
+                        scanBtn.style.display = 'none';
+                    } else {
+                        statusEl.textContent = 'Nie rozpoznano tablicy. Spróbuj ponownie.';
+                        regValue.textContent = '—';
+                        regValue.className = 'value placeholder';
+                    }
+                } else {
+                    const best = selectBestVIN(allResults);
+                    if (best) {
+                        vinValue.textContent = best;
+                        vinValue.className = 'value';
+                        statusEl.textContent = '✓ VIN odczytany: ' + best;
+                        scanBtn.style.display = 'none';
+                        nextBtn.style.display = 'none';
+                    } else {
+                        statusEl.textContent = 'Nie rozpoznano VIN. Spróbuj ponownie.';
+                        vinValue.textContent = '—';
+                        vinValue.className = 'value placeholder';
+                    }
+                }
+            } catch (e) {
+                console.error('Scan error', e);
+                statusEl.textContent = 'Błąd skanowania.';
+            } finally {
+                processing = false;
+                scanBtn.disabled = false;
+            }
+        }
+
+        function selectBestPlate(results) {
+            const candidates = [];
+            for (const r of results) {
+                const corrected = correctPlate(r.cleaned);
+                if (!corrected) continue;
+                let score = r.confidence || 0;
+                const p = corrected.match(/^[A-Z]+/)[0].length;
+                const n = corrected.length - p;
+                if (p === 2 && n === 5) score += 40;
+                else if (p === 2 && n === 4) score += 30;
+                else if (p === 3 && n === 4) score += 25;
+                else if (p === 2 && n === 3) score += 20;
+                else if (p === 1 && n === 5) score += 10;
+                score += (r.sharpness || 0) * 0.001;
+                candidates.push({ value: corrected, score });
+            }
+            if (candidates.length === 0) return null;
+            candidates.sort((a, b) => b.score - a.score);
+            return candidates[0].value;
+        }
+
+        function selectBestVIN(results) {
+            const candidates = [];
+            for (const r of results) {
+                const corrected = correctVIN(r.cleaned);
+                if (!corrected) continue;
+                let score = r.confidence || 0;
+                score += 50;
+                candidates.push({ value: corrected, score });
+            }
+            if (candidates.length === 0) return null;
+            candidates.sort((a, b) => b.score - a.score);
+            return candidates[0].value;
+        }
+
+        // ============================================================
+        // 12. PRZEŁĄCZANIE TRYBÓW I RESET
+        // ============================================================
+        function switchToVIN() {
+            mode = 'VIN';
+            modeLabel.textContent = 'ETAP 2 — NUMER VIN';
+            modeLabel.style.background = '#1e293b';
+            modeLabel.style.color = '#60a5fa';
+            scanFrame.style.top = '18%';
+            scanFrame.style.height = '64%';
+            statusEl.textContent = 'Ustaw VIN w ramce.';
+            nextBtn.style.display = 'none';
+            scanBtn.style.display = 'inline-block';
+            scanBtn.disabled = false;
+        }
+
+        function resetAll() {
+            mode = 'REGISTRATION';
+            modeLabel.textContent = 'ETAP 1 — NUMER REJESTRACYJNY';
+            modeLabel.style.background = '#1a2a2a';
+            modeLabel.style.color = '#4ade80';
+            scanFrame.style.top = '20%';
+            scanFrame.style.height = '60%';
+            regValue.textContent = '—';
+            regValue.className = 'value placeholder';
+            vinValue.textContent = '—';
+            vinValue.className = 'value placeholder';
+            nextBtn.style.display = 'none';
+            scanBtn.style.display = 'inline-block';
+            if (cameraReady && ocrReady) scanBtn.disabled = false;
+            else scanBtn.disabled = true;
+            statusEl.textContent = 'Gotowy. Ustaw tablicę w ramce.';
+        }
+
+        // ============================================================
+        // 13. OBSŁUGA PRZYCISKÓW
+        // ============================================================
+        startBtn.addEventListener('click', async () => {
+            await startCamera();
+            if (!ocrReady) {
+                await waitForOpenCV();
+                await initOCR();
+            }
+        });
+        scanBtn.addEventListener('click', scanMultipleFrames);
+        nextBtn.addEventListener('click', switchToVIN);
+        resetBtn.addEventListener('click', resetAll);
+
+        // ============================================================
+        // 14. START
+        // ============================================================
+        window.addEventListener('load', async () => {
+            await waitForOpenCV();
+            engineEl.textContent = cvReady ? 'OpenCV.js: gotowy — oczekuje kamera/OCR' : 'OpenCV.js: niedostępny';
+        });
+
+        window.addEventListener('beforeunload', async () => {
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            if (worker) try { await worker.terminate(); } catch (e) {}
+        });
+    </script>
 </body>
 </html>
