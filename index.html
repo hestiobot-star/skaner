@@ -1,18 +1,27 @@
 <!DOCTYPE html>
-
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
 
 <meta name="viewport"
-   content="width=device-width,
-            initial-scale=1.0">
+      content="width=device-width, initial-scale=1.0,
+               maximum-scale=1.0, user-scalable=no">
 
 <title>Skaner pojazdu</title>
 
-<!-- Tesseract.js -->
+<!-- =====================================================
+     OpenCV.js
+     ===================================================== -->
+<script async
+        src="https://docs.opencv.org/4.13.0/opencv.js">
+</script>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<!-- =====================================================
+     Tesseract.js
+     ===================================================== -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js">
+</script>
+
 
 <style>
 
@@ -20,102 +29,188 @@
     box-sizing: border-box;
 }
 
+html,
 body {
     margin: 0;
-    padding: 20px;
-    font-family: Arial, sans-serif;
+    padding: 0;
+    background: #101114;
+    color: #ffffff;
+    font-family: Arial, Helvetica, sans-serif;
+}
 
-    background: #121212;
-    color: white;
-
+body {
+    padding: 16px;
     text-align: center;
 }
 
+
+/* =====================================================
+   NAGŁÓWEK
+   ===================================================== */
+
 h1 {
-    margin-top: 5px;
+    margin: 5px 0 8px;
     font-size: 26px;
 }
 
-.instruction {
-    color: #ccc;
-    margin-bottom: 18px;
+.description {
+    margin: 0 auto 15px;
+    max-width: 600px;
+    color: #b8b8b8;
+    font-size: 15px;
 }
 
-/* =========================
-   KAMERA
-   ========================= */
 
-#camera-container {
+/* =====================================================
+   TRYB SKANOWANIA
+   ===================================================== */
+
+#modeLabel {
+    display: inline-block;
+
+    padding: 8px 18px;
+    margin-bottom: 12px;
+
+    border-radius: 20px;
+
+    background: #1d2a1d;
+    color: #00ff66;
+
+    font-weight: bold;
+}
+
+
+/* =====================================================
+   KAMERA
+   ===================================================== */
+
+#cameraBox {
 
     position: relative;
 
     width: 100%;
-    max-width: 640px;
+    max-width: 720px;
 
-    margin: auto;
+    margin: 0 auto;
+
+    background: #000;
+
+    border-radius: 14px;
 
     overflow: hidden;
 
-    border-radius: 12px;
-
-    background: black;
-
     box-shadow:
-        0 4px 20px rgba(0,0,0,.5);
+        0 5px 25px rgba(0,0,0,.55);
 }
 
-video {
+#video {
 
     width: 100%;
 
     display: block;
 
-    background: black;
+    background: #000;
+
+    aspect-ratio: 16 / 9;
+
+    object-fit: cover;
 }
 
-/* ramka */
 
-#scanner-frame {
+/* =====================================================
+   RAMKA SKANERA
+   ===================================================== */
+
+#scanFrame {
 
     position: absolute;
 
-    left: 5%;
-    top: 35%;
+    left: 4%;
+    width: 92%;
 
-    width: 90%;
+    top: 35%;
     height: 30%;
 
-    border: 3px solid #00ff00;
+    border: 3px solid #00ff55;
 
     border-radius: 8px;
 
     box-shadow:
-        0 0 12px #00ff00,
-        inset 0 0 12px rgba(0,255,0,.2);
+        0 0 12px rgba(0,255,85,.9),
+        inset 0 0 12px rgba(0,255,85,.15);
+
+    pointer-events: none;
+
+    transition:
+        top .25s ease,
+        height .25s ease;
+}
+
+
+/* narożniki */
+
+.corner {
+    position: absolute;
+
+    width: 25px;
+    height: 25px;
+
+    border-color: #ffffff;
+    border-style: solid;
+}
+
+.corner.tl {
+    top: -3px;
+    left: -3px;
+    border-width: 4px 0 0 4px;
+}
+
+.corner.tr {
+    top: -3px;
+    right: -3px;
+    border-width: 4px 4px 0 0;
+}
+
+.corner.bl {
+    bottom: -3px;
+    left: -3px;
+    border-width: 0 0 4px 4px;
+}
+
+.corner.br {
+    bottom: -3px;
+    right: -3px;
+    border-width: 0 4px 4px 0;
+}
+
+
+/* =====================================================
+   LINIA SKANUJĄCA
+   ===================================================== */
+
+#scanLine {
+
+    position: absolute;
+
+    left: 5%;
+    width: 90%;
+
+    height: 2px;
+
+    background: #00ff55;
+
+    box-shadow:
+        0 0 8px #00ff55;
+
+    top: 36%;
+
+    animation:
+        scanAnimation 1.8s linear infinite;
 
     pointer-events: none;
 }
 
-/* linia */
-
-#scanner-line {
-
-    position: absolute;
-
-    left: 7%;
-
-    width: 86%;
-
-    height: 2px;
-
-    background: #00ff00;
-
-    box-shadow: 0 0 8px #00ff00;
-
-    animation: scan 2s linear infinite;
-}
-
-@keyframes scan {
+@keyframes scanAnimation {
 
     0% {
         top: 36%;
@@ -130,255 +225,323 @@ video {
     }
 }
 
-/* =========================
+
+/* =====================================================
    STATUS
-   ========================= */
+   ===================================================== */
 
 #status {
 
-    margin: 15px auto;
+    min-height: 24px;
 
-    max-width: 640px;
+    margin: 14px auto;
 
-    color: #ffcc00;
+    max-width: 720px;
 
-    min-height: 25px;
+    color: #ffd54f;
+
+    font-size: 15px;
 }
 
-/* =========================
-   WYNIKI
-   ========================= */
 
-#results {
-
-    max-width: 640px;
-
-    margin: 20px auto;
-
-    text-align: left;
-}
-
-.result-card {
-
-    background: #1e1e1e;
-
-    border: 1px solid #333;
-
-    border-radius: 10px;
-
-    padding: 15px;
-
-    margin-bottom: 12px;
-}
-
-.result-title {
-
-    font-size: 14px;
-
-    color: #999;
-
-    margin-bottom: 5px;
-}
-
-.result-value {
-
-    font-size: 27px;
-
-    font-weight: bold;
-
-    color: #00ff00;
-
-    letter-spacing: 2px;
-
-    min-height: 34px;
-
-    word-break: break-all;
-}
-
-/* =========================
+/* =====================================================
    PRZYCISKI
-   ========================= */
+   ===================================================== */
+
+.buttons {
+
+    max-width: 720px;
+
+    margin: 10px auto 20px;
+
+    display: flex;
+
+    justify-content: center;
+
+    flex-wrap: wrap;
+
+    gap: 8px;
+}
 
 button {
 
     border: none;
 
-    border-radius: 8px;
+    border-radius: 9px;
 
-    padding: 14px 22px;
+    padding: 13px 18px;
 
-    margin: 6px;
-
-    font-size: 17px;
+    font-size: 16px;
 
     font-weight: bold;
 
     cursor: pointer;
-}
 
-#startButton {
-
-    background: #00c853;
-
-    color: white;
-}
-
-#scanButton {
-
-    background: #1976d2;
-
-    color: white;
-}
-
-#nextButton {
-
-    background: #ff9800;
-
-    color: white;
-}
-
-#resetButton {
-
-    background: #555;
-
-    color: white;
+    color: #fff;
 }
 
 button:disabled {
 
-    background: #444;
-
-    color: #777;
+    opacity: .4;
 
     cursor: default;
 }
 
-canvas {
-    display: none;
+#startButton {
+    background: #16a34a;
 }
 
-.hidden {
-    display: none;
+#scanButton {
+    background: #2563eb;
+}
+
+#nextButton {
+    background: #f59e0b;
+}
+
+#resetButton {
+    background: #444;
+}
+
+
+/* =====================================================
+   WYNIKI
+   ===================================================== */
+
+.results {
+
+    max-width: 720px;
+
+    margin: 0 auto;
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, minmax(0,1fr));
+
+    gap: 12px;
+}
+
+.resultCard {
+
+    background: #1b1d21;
+
+    border:
+        1px solid #30343a;
+
+    border-radius: 12px;
+
+    padding: 16px;
+
+    text-align: left;
+}
+
+.resultTitle {
+
+    color: #8f969f;
+
+    font-size: 13px;
+
+    margin-bottom: 7px;
+
+    font-weight: bold;
+}
+
+.resultValue {
+
+    min-height: 38px;
+
+    color: #00ff66;
+
+    font-size: 28px;
+
+    font-weight: bold;
+
+    letter-spacing: 2px;
+
+    word-break: break-all;
+}
+
+
+/* =====================================================
+   INFORMACJE TECHNICZNE
+   ===================================================== */
+
+#engineStatus {
+
+    margin-top: 15px;
+
+    color: #666;
+
+    font-size: 12px;
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (max-width: 550px) {
+
+    body {
+        padding: 10px;
+    }
+
+    h1 {
+        font-size: 22px;
+    }
+
+    .results {
+        grid-template-columns: 1fr;
+    }
+
+    .resultValue {
+        font-size: 25px;
+    }
+
+    button {
+        width: 100%;
+    }
 }
 
 </style>
-
 </head>
+
 
 <body>
 
+
 <h1>🚗 Skaner pojazdu</h1>
 
-<div class="instruction" id="instruction">
+<p class="description">
+    Najpierw zeskanuj numer rejestracyjny,
+    następnie numer VIN.
+</p>
 
-```
-Najpierw zeskanuj numer rejestracyjny.
-```
 
+<div id="modeLabel">
+    ETAP 1 — NUMER REJESTRACYJNY
 </div>
 
-<!-- =========================
+
+<!-- =====================================================
      KAMERA
-     ========================= -->
+     ===================================================== -->
 
-<div id="camera-container">
+<div id="cameraBox">
 
-```
-<video
-    id="webcam"
-    autoplay
-    playsinline
-    muted>
-</video>
+    <video
+        id="video"
+        autoplay
+        muted
+        playsinline>
+    </video>
 
-<div id="scanner-frame"></div>
+    <div id="scanFrame">
 
-<div id="scanner-line"></div>
-```
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+
+    </div>
+
+    <div id="scanLine"></div>
 
 </div>
+
 
 <div id="status">
     Naciśnij „Uruchom kamerę”.
 </div>
 
-<!-- =========================
+
+<!-- =====================================================
      PRZYCISKI
-     ========================= -->
+     ===================================================== -->
 
-<div>
+<div class="buttons">
 
-```
-<button id="startButton">
-    📷 Uruchom kamerę
-</button>
+    <button id="startButton">
+        📷 Uruchom kamerę
+    </button>
 
-<button
-    id="scanButton"
-    class="hidden">
+    <button
+        id="scanButton"
+        disabled>
+        🔍 Skanuj
+    </button>
 
-    🔍 Skanuj
-</button>
+    <button
+        id="nextButton"
+        style="display:none;">
+        ➡️ Skanuj VIN
+    </button>
 
-<button
-    id="nextButton"
-    class="hidden">
-
-    ➡️ Przejdź do VIN
-</button>
-
-<button
-    id="resetButton">
-
-    🔄 Zacznij od nowa
-</button>
-```
+    <button id="resetButton">
+        🔄 Reset
+    </button>
 
 </div>
 
-<!-- =========================
+
+<!-- =====================================================
      WYNIKI
-     ========================= -->
+     ===================================================== -->
 
-<div id="results">
+<div class="results">
 
-```
-<div class="result-card">
+    <div class="resultCard">
 
-    <div class="result-title">
-        NUMER REJESTRACYJNY
+        <div class="resultTitle">
+            NUMER REJESTRACYJNY
+        </div>
+
+        <div
+            id="registrationLabel"
+            class="resultValue">
+            —
+        </div>
+
     </div>
 
-    <div
-        id="registrationLabel"
-        class="result-value">
 
-        —
+    <div class="resultCard">
+
+        <div class="resultTitle">
+            VIN
+        </div>
+
+        <div
+            id="vinLabel"
+            class="resultValue">
+            —
+        </div>
+
     </div>
 
 </div>
 
 
-<div class="result-card">
-
-    <div class="result-title">
-        VIN
-    </div>
-
-    <div
-        id="vinLabel"
-        class="result-value">
-
-        —
-
-    </div>
-
-</div>
-```
-
+<div id="engineStatus">
+    Inicjalizacja silników...
 </div>
 
-<canvas id="processing-canvas"></canvas>
+
+<!-- =====================================================
+     CANVAS
+     ===================================================== -->
+
+<canvas
+    id="sourceCanvas"
+    style="display:none;">
+</canvas>
+
+<canvas
+    id="ocrCanvas"
+    style="display:none;">
+</canvas>
+
 
 <script>
 
@@ -387,22 +550,32 @@ Najpierw zeskanuj numer rejestracyjny.
    ===================================================== */
 
 const video =
-    document.getElementById("webcam");
+    document.getElementById("video");
 
-const canvas =
-    document.getElementById("processing-canvas");
+const sourceCanvas =
+    document.getElementById("sourceCanvas");
 
-const ctx =
-    canvas.getContext(
+const ocrCanvas =
+    document.getElementById("ocrCanvas");
+
+const sourceCtx =
+    sourceCanvas.getContext(
         "2d",
-        { willReadFrequently: true }
+        {
+            willReadFrequently: true
+        }
     );
 
-const statusText =
+const statusElement =
     document.getElementById("status");
 
-const instruction =
-    document.getElementById("instruction");
+const engineStatus =
+    document.getElementById(
+        "engineStatus"
+    );
+
+const modeLabel =
+    document.getElementById("modeLabel");
 
 const registrationLabel =
     document.getElementById(
@@ -434,122 +607,117 @@ const resetButton =
         "resetButton"
     );
 
+const scanFrame =
+    document.getElementById(
+        "scanFrame"
+    );
+
 
 /* =====================================================
-   ZMIENNE
+   STAN
    ===================================================== */
 
 let worker = null;
 
-let stream = null;
+let cameraStream = null;
 
-let cameraStarted = false;
+let cameraReady = false;
 
-let isProcessing = false;
+let ocrReady = false;
 
+let processing = false;
 
-/*
- * Dwa tryby pracy:
- *
- * REGISTRATION
- * VIN
- */
-
-let scanMode = "REGISTRATION";
+let mode = "REGISTRATION";
 
 
 /* =====================================================
-   URUCHOMIENIE KAMERY
+   OPEN CV
    ===================================================== */
 
-async function startCamera() {
+let cvReady = false;
 
-    if (cameraStarted) {
-        return;
-    }
+
+/*
+ * OpenCV 4.x może pojawić się jako Promise.
+ */
+
+async function waitForOpenCV() {
 
     try {
 
-        statusText.innerText =
-            "Uruchamianie kamery...";
+        if (typeof cv === "undefined") {
 
-        const constraints = {
+            /*
+             * Czekamy na załadowanie biblioteki.
+             */
 
-            video: {
+            await new Promise(
+                resolve => {
 
-                facingMode: {
-                    ideal: "environment"
-                },
+                    const timer =
+                        setInterval(
+                            async () => {
 
-                width: {
-                    ideal: 1280
-                },
+                                if (
+                                    typeof cv !==
+                                    "undefined"
+                                ) {
 
-                height: {
-                    ideal: 720
+                                    clearInterval(
+                                        timer
+                                    );
+
+                                    resolve();
+                                }
+
+                            },
+                            100
+                        );
                 }
-            },
-
-            audio: false
-        };
+            );
+        }
 
 
-        stream =
-            await navigator.mediaDevices
-                .getUserMedia(
-                    constraints
-                );
+        if (
+            cv instanceof Promise
+        ) {
+
+            cv = await cv;
+        }
 
 
-        video.srcObject = stream;
+        cvReady = true;
 
-        await video.play();
+        engineStatus.innerText =
+            "OpenCV.js: gotowy";
 
-
-        cameraStarted = true;
-
-
-        statusText.innerText =
-            "Kamera uruchomiona. Przygotowuję OCR...";
-
-
-        startButton.classList.add(
-            "hidden"
+        console.log(
+            "OpenCV gotowy"
         );
-
-        scanButton.classList.remove(
-            "hidden"
-        );
-
-
-        await initOCR();
-
 
     } catch (error) {
 
-        console.error(error);
-
-        statusText.innerText =
-            "Nie można uruchomić kamery.";
-
-        alert(
-            "Brak dostępu do kamery.\n\n" +
-            "Sprawdź uprawnienia przeglądarki."
+        console.error(
+            "OpenCV:",
+            error
         );
+
+        engineStatus.innerText =
+            "OpenCV.js: błąd";
     }
 }
 
 
 /* =====================================================
-   OCR
+   TESSERACT
    ===================================================== */
 
 async function initOCR() {
 
     try {
 
-        statusText.innerText =
-            "Ładowanie silnika OCR...";
+        statusElement.innerText =
+            "Ładowanie OCR...";
 
 
         worker =
@@ -565,31 +733,19 @@ async function initOCR() {
                             message
                         );
 
-                        if (
-                            message.status ===
-                            "recognizing text"
-                        ) {
-
-                            const percent =
-                                Math.round(
-                                    message.progress *
-                                    100
-                                );
-
-                            statusText.innerText =
-                                "OCR: " +
-                                percent +
-                                "%";
-                        }
                     }
                 }
             );
 
 
         /*
-         * Tablice i VIN:
-         * tylko wielkie litery
-         * oraz cyfry.
+         * Bardzo ważne:
+         *
+         * Tesseract nie dostaje całej
+         * fotografii samochodu.
+         *
+         * Dostaje przygotowany,
+         * powiększony fragment.
          */
 
         await worker.setParameters({
@@ -606,350 +762,1401 @@ async function initOCR() {
         });
 
 
-        statusText.innerText =
-            "Gotowe. Zeskanuj numer rejestracyjny.";
+        ocrReady = true;
+
+
+        engineStatus.innerText =
+            "OpenCV.js + Tesseract: GOTOWE";
+
+
+        statusElement.innerText =
+            "Gotowe. Ustaw tablicę w ramce.";
+
+
+        scanButton.disabled =
+            false;
+
 
     } catch (error) {
 
         console.error(
-            "OCR ERROR:",
+            "Tesseract ERROR:",
             error
         );
 
-        statusText.innerText =
-            "Błąd uruchamiania OCR.";
+        statusElement.innerText =
+            "Nie udało się uruchomić OCR.";
     }
 }
 
 
 /* =====================================================
-   PRZYGOTOWANIE OBRAZU
+   KAMERA
    ===================================================== */
 
-function prepareImage() {
+async function startCamera() {
+
+    if (cameraReady) {
+        return;
+    }
+
+
+    try {
+
+        if (
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia
+        ) {
+
+            throw new Error(
+                "getUserMedia niedostępne"
+            );
+        }
+
+
+        statusElement.innerText =
+            "Uruchamianie kamery...";
+
+
+        cameraStream =
+            await navigator.mediaDevices
+                .getUserMedia({
+
+                    video: {
+
+                        facingMode: {
+                            ideal: "environment"
+                        },
+
+                        width: {
+                            ideal: 1920
+                        },
+
+                        height: {
+                            ideal: 1080
+                        },
+
+                        aspectRatio: {
+                            ideal: 16 / 9
+                        }
+                    },
+
+                    audio: false
+                });
+
+
+        video.srcObject =
+            cameraStream;
+
+
+        await video.play();
+
+
+        cameraReady = true;
+
+
+        startButton.style.display =
+            "none";
+
+
+        statusElement.innerText =
+            "Kamera gotowa.";
+
+
+        /*
+         * Jeżeli OCR jest już gotowy,
+         * aktywujemy skanowanie.
+         */
+
+        if (ocrReady) {
+
+            scanButton.disabled =
+                false;
+        }
+
+
+    } catch (error) {
+
+        console.error(
+            "CAMERA ERROR:",
+            error
+        );
+
+        statusElement.innerText =
+            "Nie można uruchomić kamery.";
+
+        alert(
+            "Brak dostępu do kamery.\n\n" +
+            "Sprawdź uprawnienia przeglądarki."
+        );
+    }
+}
+
+
+/* =====================================================
+   POBRANIE OBSZARU RAMKI
+   ===================================================== */
+
+function captureFrame() {
+
+    const vw =
+        video.videoWidth;
+
+    const vh =
+        video.videoHeight;
+
 
     if (
-        video.videoWidth === 0 ||
-        video.videoHeight === 0
+        !vw ||
+        !vh
     ) {
 
-        return false;
+        throw new Error(
+            "Brak obrazu z kamery"
+        );
     }
 
 
     /*
-     * Pobieramy środkową część obrazu.
+     * Ramka odpowiada:
+     *
+     * X = 4%
+     * szerokość = 92%
+     *
+     * Y zależy od trybu.
      */
 
-    const sourceX =
+
+    let yRatio;
+
+    let hRatio;
+
+
+    if (
+        mode === "REGISTRATION"
+    ) {
+
+        /*
+         * Tablica:
+         * szeroka i niska.
+         */
+
+        yRatio = 0.35;
+
+        hRatio = 0.30;
+
+    } else {
+
+        /*
+         * VIN może znajdować się
+         * na słupku/drzwiach/szybie,
+         * więc dajemy większą wysokość.
+         */
+
+        yRatio = 0.28;
+
+        hRatio = 0.44;
+    }
+
+
+    const sx =
         Math.floor(
-            video.videoWidth * 0.05
+            vw * 0.04
         );
 
-    const sourceY =
+    const sy =
         Math.floor(
-            video.videoHeight * 0.35
+            vh * yRatio
         );
 
-    const sourceWidth =
+    const sw =
         Math.floor(
-            video.videoWidth * 0.90
+            vw * 0.92
         );
 
-    const sourceHeight =
+    const sh =
         Math.floor(
-            video.videoHeight * 0.30
+            vh * hRatio
         );
 
 
     /*
-     * Powiększenie obrazu.
+     * Maksymalny rozmiar obrazu OCR.
      */
 
-    const scale = 2;
+    const targetWidth =
+        mode === "REGISTRATION"
+            ? 1600
+            : 1800;
 
 
-    canvas.width =
-        sourceWidth * scale;
-
-    canvas.height =
-        sourceHeight * scale;
+    const scale =
+        targetWidth / sw;
 
 
-    /*
-     * Rysowanie obrazu.
-     */
+    sourceCanvas.width =
+        sw;
 
-    ctx.filter =
-        "contrast(1.35) brightness(1.05)";
+    sourceCanvas.height =
+        sh;
 
 
-    ctx.drawImage(
+    sourceCtx.drawImage(
 
         video,
 
-        sourceX,
-        sourceY,
-
-        sourceWidth,
-        sourceHeight,
+        sx,
+        sy,
+        sw,
+        sh,
 
         0,
         0,
-
-        canvas.width,
-        canvas.height
+        sw,
+        sh
     );
-
-
-    ctx.filter = "none";
 
 
     /*
-     * Skala szarości.
+     * Powiększamy.
      */
 
-    const imageData =
-        ctx.getImageData(
-            0,
-            0,
-            canvas.width,
-            canvas.height
+    const resultCanvas =
+        document.createElement(
+            "canvas"
         );
 
 
-    const data =
-        imageData.data;
+    resultCanvas.width =
+        Math.round(
+            sw * scale
+        );
+
+    resultCanvas.height =
+        Math.round(
+            sh * scale
+        );
 
 
-    for (
-        let i = 0;
-        i < data.length;
-        i += 4
-    ) {
-
-        const brightness =
-            0.299 * data[i] +
-            0.587 * data[i + 1] +
-            0.114 * data[i + 2];
+    const resultCtx =
+        resultCanvas.getContext(
+            "2d"
+        );
 
 
-        data[i] =
-            brightness;
-
-        data[i + 1] =
-            brightness;
-
-        data[i + 2] =
-            brightness;
-    }
+    resultCtx.imageSmoothingEnabled =
+        true;
 
 
-    ctx.putImageData(
-        imageData,
+    resultCtx.imageSmoothingQuality =
+        "high";
+
+
+    resultCtx.drawImage(
+
+        sourceCanvas,
+
         0,
-        0
+        0,
+
+        resultCanvas.width,
+        resultCanvas.height
     );
 
 
-    return true;
+    return resultCanvas;
 }
 
 
 /* =====================================================
-   SKANOWANIE
+   OPENCV — PRZETWARZANIE
    ===================================================== */
 
-async function scanFrame() {
+function processWithOpenCV(
+    inputCanvas,
+    variant
+) {
+
+    /*
+     * OpenCV.js:
+     *
+     * BGR/RGBA
+     * grayscale
+     * CLAHE
+     * blur
+     * threshold
+     *
+     * Każdy wariant jest trochę inny.
+     */
+
+    let src = null;
+    let gray = null;
+    let result = null;
+    let clahe = null;
+    let blurred = null;
+
+
+    try {
+
+        src =
+            cv.imread(
+                inputCanvas
+            );
+
+
+        gray =
+            new cv.Mat();
+
+
+        /*
+         * Skala szarości.
+         */
+
+        cv.cvtColor(
+            src,
+            gray,
+            cv.COLOR_RGBA2GRAY
+        );
+
+
+        /*
+         * Lekki blur usuwa drobne
+         * szumy z kamery.
+         */
+
+        blurred =
+            new cv.Mat();
+
+
+        cv.GaussianBlur(
+            gray,
+            blurred,
+            new cv.Size(3, 3),
+            0,
+            0,
+            cv.BORDER_DEFAULT
+        );
+
+
+        /* =============================================
+           WARIANT 1
+           CLAHE
+           ============================================= */
+
+        if (
+            variant === "CLAHE"
+        ) {
+
+            result =
+                new cv.Mat();
+
+            clahe =
+                new cv.CLAHE(
+                    2.5,
+                    new cv.Size(8, 8)
+                );
+
+            clahe.apply(
+                blurred,
+                result
+            );
+
+        }
+
+
+        /* =============================================
+           WARIANT 2
+           OTSU
+           ============================================= */
+
+        else if (
+            variant === "OTSU"
+        ) {
+
+            result =
+                new cv.Mat();
+
+            cv.threshold(
+                blurred,
+                result,
+                0,
+                255,
+                cv.THRESH_BINARY +
+                cv.THRESH_OTSU
+            );
+        }
+
+
+        /* =============================================
+           WARIANT 3
+           ADAPTIVE
+           ============================================= */
+
+        else if (
+            variant === "ADAPTIVE"
+        ) {
+
+            result =
+                new cv.Mat();
+
+            cv.adaptiveThreshold(
+
+                blurred,
+
+                result,
+
+                255,
+
+                cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+
+                cv.THRESH_BINARY,
+
+                31,
+
+                7
+            );
+        }
+
+
+        /* =============================================
+           WARIANT 4
+           ADAPTIVE INVERTED
+           ============================================= */
+
+        else {
+
+            result =
+                new cv.Mat();
+
+            cv.adaptiveThreshold(
+
+                blurred,
+
+                result,
+
+                255,
+
+                cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+
+                cv.THRESH_BINARY_INV,
+
+                31,
+
+                7
+            );
+        }
+
+
+        /*
+         * Wstawiamy wynik do canvas.
+         */
+
+        ocrCanvas.width =
+            result.cols;
+
+        ocrCanvas.height =
+            result.rows;
+
+
+        cv.imshow(
+            ocrCanvas,
+            result
+        );
+
+
+        /*
+         * Zwracamy kopię canvas,
+         * ponieważ Mat trzeba zwolnić.
+         */
+
+        const output =
+            document.createElement(
+                "canvas"
+            );
+
+
+        output.width =
+            result.cols;
+
+        output.height =
+            result.rows;
+
+
+        output
+            .getContext("2d")
+            .drawImage(
+                ocrCanvas,
+                0,
+                0
+            );
+
+
+        return output;
+
+
+    } finally {
+
+        /*
+         * WAŻNE:
+         * zwalniamy pamięć WASM.
+         */
+
+        if (clahe) {
+            clahe.delete();
+        }
+
+        if (result) {
+            result.delete();
+        }
+
+        if (blurred) {
+            blurred.delete();
+        }
+
+        if (gray) {
+            gray.delete();
+        }
+
+        if (src) {
+            src.delete();
+        }
+    }
+}
+
+
+/* =====================================================
+   OCR — JEDEN WARIANT
+   ===================================================== */
+
+async function recognizeVariant(
+    canvas,
+    variant
+) {
+
+    let processed;
+
+
+    if (cvReady) {
+
+        processed =
+            processWithOpenCV(
+                canvas,
+                variant
+            );
+
+    } else {
+
+        processed =
+            canvas;
+    }
+
+
+    const result =
+        await worker.recognize(
+            processed
+        );
+
+
+    const text =
+        result?.data?.text || "";
+
+
+    /*
+     * Tesseract confidence.
+     */
+
+    const confidence =
+        Number(
+            result?.data?.confidence || 0
+        );
+
+
+    return {
+
+        raw: text,
+
+        cleaned:
+            cleanOCR(text),
+
+        confidence,
+
+        variant
+    };
+}
+
+
+/* =====================================================
+   CZYSZCZENIE OCR
+   ===================================================== */
+
+function cleanOCR(text) {
+
+    return text
+
+        .toUpperCase()
+
+        /*
+         * OCR potrafi wstawić spacje,
+         * myślniki, nowe linie.
+         */
+
+        .replace(
+            /[^A-Z0-9]/g,
+            ""
+        );
+}
+
+
+/* =====================================================
+   KOREKCJA TABLICY
+   ===================================================== */
+
+function correctRegistration(
+    value
+) {
+
+    value =
+        value
+            .toUpperCase()
+            .replace(
+                /[^A-Z0-9]/g,
+                ""
+            );
+
+
+    /*
+     * Tablica musi mieć sensowną
+     * długość.
+     *
+     * Typowe polskie tablice:
+     *
+     * 5–8 znaków
+     */
+
 
     if (
-        isProcessing ||
-        !worker ||
-        !cameraStarted
+        value.length < 5 ||
+        value.length > 8
+    ) {
+
+        return null;
+    }
+
+
+    /*
+     * Szukamy początku tablicy:
+     *
+     * 2–3 litery
+     */
+
+    let candidates = [];
+
+
+    /*
+     * Najczęstszy układ:
+     *
+     * LL12345
+     */
+
+    candidates.push(
+        value
+    );
+
+
+    /*
+     * Typowe pomyłki OCR
+     * dla cyfr.
+     *
+     * Stosujemy je tylko
+     * w części numerycznej.
+     */
+
+    for (
+        let prefixLength = 2;
+        prefixLength <= 3;
+        prefixLength++
+    ) {
+
+        if (
+            value.length <=
+            prefixLength
+        ) {
+            continue;
+        }
+
+
+        let prefix =
+            value.substring(
+                0,
+                prefixLength
+            );
+
+
+        let rest =
+            value.substring(
+                prefixLength
+            );
+
+
+        /*
+         * Litery w prefiksie.
+         */
+
+        prefix =
+            prefix
+                .replace(
+                    /0/g,
+                    "O"
+                )
+                .replace(
+                    /1/g,
+                    "I"
+                )
+                .replace(
+                    /2/g,
+                    "Z"
+                )
+                .replace(
+                    /5/g,
+                    "S"
+                );
+
+
+        /*
+         * Cyfry w dalszej części.
+         */
+
+        rest =
+            rest
+                .replace(
+                    /O/g,
+                    "0"
+                )
+                .replace(
+                    /I/g,
+                    "1"
+                )
+                .replace(
+                    /Z/g,
+                    "2"
+                )
+                .replace(
+                    /S/g,
+                    "5"
+                )
+                .replace(
+                    /B/g,
+                    "8"
+                );
+
+
+        /*
+         * Akceptujemy tylko wtedy,
+         * gdy początek jest literowy,
+         * a dalsza część zawiera cyfry.
+         */
+
+        if (
+            /^[A-Z]{2,3}$/.test(
+                prefix
+            ) &&
+            /^[0-9A-Z]{3,5}$/.test(
+                rest
+            )
+        ) {
+
+            candidates.push(
+                prefix + rest
+            );
+        }
+    }
+
+
+    /*
+     * Usuwamy duplikaty.
+     */
+
+    candidates =
+        [...new Set(
+            candidates
+        )];
+
+
+    /*
+     * Preferujemy format:
+     *
+     * 2–3 litery + 3–5 znaków.
+     */
+
+    const valid =
+        candidates.find(
+            candidate =>
+                /^[A-Z]{2,3}[0-9A-Z]{3,5}$/
+                    .test(candidate)
+        );
+
+
+    return valid || null;
+}
+
+
+/* =====================================================
+   FORMATOWANIE TABLICY
+   ===================================================== */
+
+function formatRegistration(
+    value
+) {
+
+    if (!value) {
+        return null;
+    }
+
+
+    /*
+     * Dla:
+     *
+     * DW12345
+     *
+     * otrzymujemy:
+     *
+     * DW 12345
+     */
+
+
+    if (
+        /^[A-Z]{2}[0-9A-Z]{3,5}$/
+            .test(value)
+    ) {
+
+        return (
+            value.substring(
+                0,
+                2
+            ) +
+            " " +
+            value.substring(2)
+        );
+    }
+
+
+    if (
+        /^[A-Z]{3}[0-9A-Z]{3,5}$/
+            .test(value)
+    ) {
+
+        return (
+            value.substring(
+                0,
+                3
+            ) +
+            " " +
+            value.substring(3)
+        );
+    }
+
+
+    return value;
+}
+
+
+/* =====================================================
+   KOREKCJA VIN
+   ===================================================== */
+
+function correctVIN(
+    value
+) {
+
+    value =
+        value
+            .toUpperCase()
+            .replace(
+                /[^A-Z0-9]/g,
+                ""
+            );
+
+
+    /*
+     * VIN:
+     *
+     * dokładnie 17 znaków
+     *
+     * bez I O Q.
+     */
+
+
+    /*
+     * Jeżeli OCR odczytał
+     * 18 znaków, próbujemy usunąć
+     * pojedynczy śmieciowy znak.
+     */
+
+    if (
+        value.length === 18
+    ) {
+
+        for (
+            let i = 0;
+            i < value.length;
+            i++
+        ) {
+
+            const candidate =
+                value.substring(
+                    0,
+                    i
+                ) +
+                value.substring(
+                    i + 1
+                );
+
+
+            if (
+                isValidVINChars(
+                    candidate
+                )
+            ) {
+
+                value =
+                    candidate;
+
+                break;
+            }
+        }
+    }
+
+
+    /*
+     * Typowe pomyłki OCR.
+     */
+
+    value =
+        value
+            .replace(
+                /O/g,
+                "0"
+            )
+            .replace(
+                /I/g,
+                "1"
+            )
+            .replace(
+                /Q/g,
+                "0"
+            );
+
+
+    if (
+        value.length !== 17
+    ) {
+
+        return null;
+    }
+
+
+    if (
+        !isValidVINChars(
+            value
+        )
+    ) {
+
+        return null;
+    }
+
+
+    return value;
+}
+
+
+/* =====================================================
+   WALIDACJA VIN
+   ===================================================== */
+
+function isValidVINChars(
+    value
+) {
+
+    return /^[A-HJ-NPR-Z0-9]{17}$/
+        .test(value);
+}
+
+
+/* =====================================================
+   OCENA WYNIKÓW TABLICY
+   ===================================================== */
+
+function chooseRegistration(
+    results
+) {
+
+    const candidates = [];
+
+
+    for (
+        const result of results
+    ) {
+
+        const corrected =
+            correctRegistration(
+                result.cleaned
+            );
+
+
+        if (!corrected) {
+            continue;
+        }
+
+
+        let score =
+            result.confidence;
+
+
+        /*
+         * Mocna premia za format
+         * 2 litery + 5 cyfr.
+         *
+         * Przykład:
+         * DW12345
+         */
+
+        if (
+            /^[A-Z]{2}[0-9]{5}$/
+                .test(corrected)
+        ) {
+
+            score += 30;
+        }
+
+
+        /*
+         * Premia za zgodność
+         * z typowym układem.
+         */
+
+        if (
+            /^[A-Z]{2,3}[0-9]{3,5}$/
+                .test(corrected)
+        ) {
+
+            score += 15;
+        }
+
+
+        candidates.push({
+
+            value:
+                corrected,
+
+            score,
+
+            confidence:
+                result.confidence,
+
+            variant:
+                result.variant
+        });
+    }
+
+
+    if (
+        candidates.length === 0
+    ) {
+
+        return null;
+    }
+
+
+    /*
+     * Sortowanie.
+     */
+
+    candidates.sort(
+        (a,b) =>
+            b.score - a.score
+    );
+
+
+    return candidates[0];
+}
+
+
+/* =====================================================
+   OCENA VIN
+   ===================================================== */
+
+function chooseVIN(
+    results
+) {
+
+    const candidates = [];
+
+
+    for (
+        const result of results
+    ) {
+
+        const corrected =
+            correctVIN(
+                result.cleaned
+            );
+
+
+        if (!corrected) {
+            continue;
+        }
+
+
+        let score =
+            result.confidence;
+
+
+        /*
+         * VIN 17 znaków:
+         * bardzo silna premia.
+         */
+
+        score += 50;
+
+
+        candidates.push({
+
+            value:
+                corrected,
+
+            score,
+
+            confidence:
+                result.confidence,
+
+            variant:
+                result.variant
+        });
+    }
+
+
+    if (
+        candidates.length === 0
+    ) {
+
+        return null;
+    }
+
+
+    candidates.sort(
+        (a,b) =>
+            b.score - a.score
+    );
+
+
+    return candidates[0];
+}
+
+
+/* =====================================================
+   GŁÓWNE SKANOWANIE
+   ===================================================== */
+
+async function scan() {
+
+    if (
+        processing ||
+        !cameraReady ||
+        !ocrReady
     ) {
 
         return;
     }
 
 
-    isProcessing = true;
+    processing = true;
+
+    scanButton.disabled =
+        true;
 
 
     try {
 
-        statusText.innerText =
-            scanMode === "REGISTRATION"
+        statusElement.innerText =
+            mode === "REGISTRATION"
 
-            ? "Skanowanie numeru rejestracyjnego..."
+                ? "Analizuję tablicę..."
 
-            : "Skanowanie numeru VIN...";
+                : "Analizuję VIN...";
 
 
         /*
-         * Przygotowanie obrazu.
+         * Pobieramy aktualną klatkę.
          */
 
-        if (!prepareImage()) {
+        const captured =
+            captureFrame();
 
-            throw new Error(
-                "Brak obrazu z kamery."
-            );
+
+        /*
+         * Cztery różne metody.
+         *
+         * To jest bardzo ważne.
+         *
+         * Nie ufamy pojedynczemu
+         * przetworzeniu obrazu.
+         */
+
+        const variants = [
+
+            "CLAHE",
+
+            "OTSU",
+
+            "ADAPTIVE",
+
+            "ADAPTIVE_INV"
+        ];
+
+
+        const results = [];
+
+
+        for (
+            const variant of variants
+        ) {
+
+            try {
+
+                const result =
+                    await recognizeVariant(
+                        captured,
+                        variant
+                    );
+
+
+                console.log(
+                    variant,
+                    result
+                );
+
+
+                results.push(
+                    result
+                );
+
+
+            } catch (error) {
+
+                console.warn(
+                    "Wariant OCR:",
+                    variant,
+                    error
+                );
+            }
         }
 
 
         /*
-         * OCR.
+         * ==========================================
+         * TABLICA
+         * ==========================================
          */
-
-        const result =
-            await worker.recognize(
-                canvas
-            );
-
-
-        let text =
-            result.data.text || "";
-
-
-        console.log(
-            "OCR RAW:",
-            text
-        );
-
-
-        /*
-         * Usuwamy:
-         * spacje
-         * myślniki
-         * znaki specjalne
-         */
-
-        let cleaned =
-            text
-                .replace(
-                    /[^A-Z0-9]/gi,
-                    ""
-                )
-                .toUpperCase();
-
-
-        console.log(
-            "OCR CLEAN:",
-            cleaned
-        );
-
-
-        /* =================================================
-           NUMER REJESTRACYJNY
-           ================================================= */
 
         if (
-            scanMode === "REGISTRATION"
+            mode === "REGISTRATION"
         ) {
 
+            const best =
+                chooseRegistration(
+                    results
+                );
+
+
+            if (!best) {
+
+                statusElement.innerText =
+                    "Nie rozpoznano tablicy. " +
+                    "Podejdź bliżej i ustaw ją poziomo.";
+
+                return;
+            }
+
+
+            registrationLabel.innerText =
+                formatRegistration(
+                    best.value
+                );
+
+
+            statusElement.innerText =
+                "✓ Odczytano numer: " +
+                formatRegistration(
+                    best.value
+                );
+
+
             /*
-             * Polska tablica ma zwykle
-             * 4–8 znaków.
+             * Przejście do VIN.
              */
 
-            if (
-                cleaned.length >= 4 &&
-                cleaned.length <= 8
-            ) {
+            nextButton.style.display =
+                "inline-block";
 
-                registrationLabel.innerText =
-                    cleaned;
+            scanButton.style.display =
+                "none";
 
 
-                statusText.innerText =
-                    "✓ Numer rejestracyjny odczytany.";
-
-
-                /*
-                 * Pokazujemy przycisk
-                 * przejścia do VIN.
-                 */
-
-                nextButton.classList.remove(
-                    "hidden"
-                );
-
-
-                scanButton.classList.add(
-                    "hidden"
-                );
-
-            } else {
-
-                statusText.innerText =
-                    "Nie rozpoznano tablicy. " +
-                    "Ustaw ją dokładniej w ramce.";
-            }
+            console.log(
+                "NAJLEPSZY WYNIK TABLICY:",
+                best
+            );
         }
 
 
-        /* =================================================
-           VIN
-           ================================================= */
+        /*
+         * ==========================================
+         * VIN
+         * ==========================================
+         */
 
-        else if (
-            scanMode === "VIN"
-        ) {
+        else {
+
+            const best =
+                chooseVIN(
+                    results
+                );
+
+
+            if (!best) {
+
+                statusElement.innerText =
+                    "Nie znaleziono poprawnego VIN. " +
+                    "VIN musi mieć dokładnie 17 znaków.";
+
+                return;
+            }
+
+
+            vinLabel.innerText =
+                best.value;
+
+
+            statusElement.innerText =
+                "✓ VIN odczytany poprawnie.";
+
+
+            console.log(
+                "NAJLEPSZY VIN:",
+                best
+            );
+
 
             /*
-             * VIN ma dokładnie 17 znaków.
+             * Po poprawnym VIN
+             * zatrzymujemy kolejne skanowanie.
              */
 
-            if (
-                cleaned.length === 17
-            ) {
+            scanButton.style.display =
+                "none";
 
-                /*
-                 * VIN nie zawiera
-                 * liter I, O, Q.
-                 */
-
-                cleaned =
-                    cleaned.replace(
-                        /[IOQ]/g,
-                        ""
-                    );
-
-
-                /*
-                 * Jeżeli po usunięciu
-                 * niedozwolonych znaków
-                 * nadal mamy 17 znaków,
-                 * uznajemy wynik.
-                 */
-
-                if (
-                    cleaned.length === 17
-                ) {
-
-                    vinLabel.innerText =
-                        cleaned;
-
-
-                    statusText.innerText =
-                        "✓ VIN odczytany.";
-
-
-                    scanButton.classList.add(
-                        "hidden"
-                    );
-
-                } else {
-
-                    statusText.innerText =
-                        "VIN zawiera błędne znaki.";
-                }
-
-            } else {
-
-                statusText.innerText =
-                    "VIN powinien mieć 17 znaków.";
-            }
+            nextButton.style.display =
+                "none";
         }
 
 
@@ -960,12 +2167,20 @@ async function scanFrame() {
             error
         );
 
-        statusText.innerText =
-            "Błąd podczas skanowania.";
+        statusElement.innerText =
+            "Błąd podczas analizy obrazu.";
 
     } finally {
 
-        isProcessing = false;
+        processing = false;
+
+        if (
+            mode === "REGISTRATION"
+        ) {
+
+            scanButton.disabled =
+                false;
+        }
     }
 }
 
@@ -974,40 +2189,50 @@ async function scanFrame() {
    PRZEJŚCIE DO VIN
    ===================================================== */
 
-function startVINScan() {
+function switchToVIN() {
 
-    scanMode = "VIN";
-
-
-    instruction.innerText =
-        "Teraz zeskanuj numer VIN. " +
-        "Umieść cały VIN w zielonej ramce.";
+    mode =
+        "VIN";
 
 
-    statusText.innerText =
-        "Gotowy do skanowania VIN.";
+    modeLabel.innerText =
+        "ETAP 2 — NUMER VIN";
 
 
-    /*
-     * Czyścimy poprzedni VIN.
-     */
+    modeLabel.style.color =
+        "#60a5fa";
 
-    vinLabel.innerText =
-        "—";
+
+    modeLabel.style.background =
+        "#17233a";
 
 
     /*
-     * Pokazujemy skanowanie.
+     * VIN potrzebuje większego
+     * pola w pionie.
      */
 
-    scanButton.classList.remove(
-        "hidden"
-    );
+    scanFrame.style.top =
+        "28%";
+
+    scanFrame.style.height =
+        "44%";
 
 
-    nextButton.classList.add(
-        "hidden"
-    );
+    statusElement.innerText =
+        "Ustaw cały VIN w zielonej ramce.";
+
+
+    nextButton.style.display =
+        "none";
+
+
+    scanButton.style.display =
+        "inline-block";
+
+
+    scanButton.disabled =
+        false;
 }
 
 
@@ -1017,7 +2242,7 @@ function startVINScan() {
 
 function resetScanner() {
 
-    scanMode =
+    mode =
         "REGISTRATION";
 
 
@@ -1028,57 +2253,89 @@ function resetScanner() {
         "—";
 
 
-    instruction.innerText =
-        "Najpierw zeskanuj numer rejestracyjny.";
+    modeLabel.innerText =
+        "ETAP 1 — NUMER REJESTRACYJNY";
 
 
-    statusText.innerText =
-        cameraStarted
-
-        ? "Gotowy do skanowania numeru rejestracyjnego."
-
-        : "Naciśnij „Uruchom kamerę”.";
+    modeLabel.style.color =
+        "#00ff66";
 
 
-    if (cameraStarted) {
+    modeLabel.style.background =
+        "#1d2a1d";
 
-        scanButton.classList.remove(
-            "hidden"
-        );
+
+    scanFrame.style.top =
+        "35%";
+
+    scanFrame.style.height =
+        "30%";
+
+
+    nextButton.style.display =
+        "none";
+
+
+    if (cameraReady) {
+
+        scanButton.style.display =
+            "inline-block";
+
+        scanButton.disabled =
+            !ocrReady;
+
+
+        statusElement.innerText =
+            "Gotowy. Ustaw tablicę w ramce.";
 
     } else {
 
-        scanButton.classList.add(
-            "hidden"
-        );
+        scanButton.style.display =
+            "inline-block";
+
+        scanButton.disabled =
+            true;
+
+        statusElement.innerText =
+            "Naciśnij „Uruchom kamerę”.";
     }
-
-
-    nextButton.classList.add(
-        "hidden"
-    );
 }
 
 
 /* =====================================================
-   OBSŁUGA PRZYCISKÓW
+   PRZYCISKI
    ===================================================== */
 
 startButton.addEventListener(
     "click",
-    startCamera
+    async function() {
+
+        await startCamera();
+
+        /*
+         * OCR można uruchomić równolegle
+         * z kamerą.
+         */
+
+        if (!ocrReady) {
+
+            await waitForOpenCV();
+
+            await initOCR();
+        }
+    }
 );
 
 
 scanButton.addEventListener(
     "click",
-    scanFrame
+    scan
 );
 
 
 nextButton.addEventListener(
     "click",
-    startVINScan
+    switchToVIN
 );
 
 
@@ -1089,16 +2346,38 @@ resetButton.addEventListener(
 
 
 /* =====================================================
-   ZAMKNIĘCIE STRONY
+   START OPEN CV
+   ===================================================== */
+
+window.addEventListener(
+    "load",
+    async function() {
+
+        await waitForOpenCV();
+
+        engineStatus.innerText =
+            cvReady
+
+                ? "OpenCV.js: gotowy — oczekuje kamera/OCR"
+
+                : "OpenCV.js: niedostępny";
+    }
+);
+
+
+/* =====================================================
+   ZAMKNIĘCIE
    ===================================================== */
 
 window.addEventListener(
     "beforeunload",
-    function() {
+    async function() {
 
-        if (stream) {
+        if (
+            cameraStream
+        ) {
 
-            stream
+            cameraStream
                 .getTracks()
                 .forEach(
                     track =>
@@ -1106,9 +2385,19 @@ window.addEventListener(
                 );
         }
 
-        if (worker) {
 
-            worker.terminate();
+        if (
+            worker
+        ) {
+
+            try {
+
+                await worker.terminate();
+
+            } catch (e) {
+
+                console.warn(e);
+            }
         }
     }
 );
