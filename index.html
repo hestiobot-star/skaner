@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Skaner rejestracji – OCR.space</title>
+    <title>Skaner Rejestracji</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             background: #0b0d10;
             color: #e0e0e0;
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: 'Segoe UI', Roboto, Arial, sans-serif;
             padding: 16px;
             min-height: 100vh;
             display: flex;
@@ -20,6 +20,7 @@
         h1 {
             font-size: 28px;
             font-weight: 300;
+            letter-spacing: 1px;
             margin: 8px 0 4px;
             display: flex;
             align-items: center;
@@ -57,10 +58,10 @@
         }
         #scanFrame {
             position: absolute;
-            left: 6%;
-            width: 88%;
-            top: 22%;
-            height: 56%;
+            left: 5%;
+            width: 90%;
+            top: 25%;
+            height: 50%;
             border: 2.5px solid #4ade80;
             border-radius: 12px;
             box-shadow: 0 0 25px rgba(74,222,128,0.4), inset 0 0 20px rgba(74,222,128,0.1);
@@ -80,20 +81,20 @@
         .corner.br { bottom: -3px; right: -3px; border-width: 0 4px 4px 0; }
         #scanLine {
             position: absolute;
-            left: 7%;
-            width: 86%;
+            left: 6%;
+            width: 88%;
             height: 2px;
             background: #4ade80;
             box-shadow: 0 0 12px #4ade80;
-            top: 24%;
+            top: 27%;
             animation: scan 2.2s ease-in-out infinite;
             pointer-events: none;
             border-radius: 2px;
         }
         @keyframes scan {
-            0% { top: 24%; }
-            50% { top: 76%; }
-            100% { top: 24%; }
+            0% { top: 27%; }
+            50% { top: 73%; }
+            100% { top: 27%; }
         }
         #status {
             min-height: 28px;
@@ -124,11 +125,10 @@
             flex: 1 1 auto;
             min-width: 110px;
         }
-        button:disabled { opacity: 0.4; cursor: default; transform: none; box-shadow: none; }
+        button:disabled { opacity: 0.4; cursor: default; transform: none; }
         button:active:not(:disabled) { transform: scale(0.96); }
         #startBtn { background: #16a34a; }
         #scanBtn { background: #2563eb; }
-        #nextBtn { background: #d97706; display: none; }
         #resetBtn { background: #6b7280; }
         .results {
             display: grid;
@@ -142,7 +142,6 @@
             border-radius: 16px;
             padding: 16px 18px;
             text-align: left;
-            transition: border-color 0.3s;
         }
         .card .title {
             color: #9ca3af;
@@ -177,8 +176,9 @@
 <body>
 <div class="container">
     <h1>🚗 Skaner <span>rejestracji</span></h1>
-    <div class="sub">Zeskanuj numer rejestracyjny, następnie VIN</div>
-    <div id="modeLabel">ETAP 1 — NUMER REJESTRACYJNY</div>
+    <div class="sub">Zeskanuj numer rejestracyjny</div>
+    <div id="modeLabel">NUMER REJESTRACYJNY</div>
+
     <div class="camera-box">
         <video id="video" autoplay muted playsinline></video>
         <div id="scanFrame">
@@ -189,13 +189,15 @@
         </div>
         <div id="scanLine"></div>
     </div>
+
     <div id="status">Naciśnij „Uruchom kamerę”</div>
+
     <div class="btn-group">
         <button id="startBtn">📷 Kamera</button>
         <button id="scanBtn" disabled>🔍 Skanuj</button>
-        <button id="nextBtn">➡️ VIN</button>
         <button id="resetBtn">↺ Reset</button>
     </div>
+
     <div class="results">
         <div class="card">
             <div class="title">Numer rejestracyjny</div>
@@ -206,7 +208,8 @@
             <div class="value placeholder" id="vinValue">—</div>
         </div>
     </div>
-    <div id="engineStatus">Inicjalizacja...</div>
+
+    <div id="engineStatus">Gotowy</div>
 </div>
 
 <canvas id="captureCanvas"></canvas>
@@ -217,23 +220,17 @@
 // ============================================================
 const video = document.getElementById('video');
 const statusEl = document.getElementById('status');
-const engineEl = document.getElementById('engineStatus');
-const modeLabel = document.getElementById('modeLabel');
 const regValue = document.getElementById('regValue');
 const vinValue = document.getElementById('vinValue');
 const startBtn = document.getElementById('startBtn');
 const scanBtn = document.getElementById('scanBtn');
-const nextBtn = document.getElementById('nextBtn');
 const resetBtn = document.getElementById('resetBtn');
-const scanFrame = document.getElementById('scanFrame');
 const captureCanvas = document.getElementById('captureCanvas');
-const capCtx = captureCanvas.getContext('2d');
+const ctx = captureCanvas.getContext('2d');
 
 let cameraReady = false;
 let processing = false;
-let mode = 'REGISTRATION';
 let stream = null;
-let lastPlate = null;
 
 // ============================================================
 // KAMERA
@@ -255,12 +252,11 @@ async function startCamera() {
         await video.play();
         cameraReady = true;
         startBtn.style.display = 'none';
-        statusEl.innerText = 'Kamera gotowa.';
+        statusEl.innerText = 'Kamera gotowa. Ustaw tablicę w ramce.';
         scanBtn.disabled = false;
-        engineEl.innerText = '✅ Kamera + OCR.space gotowe';
     } catch (e) {
         console.error('Camera error', e);
-        statusEl.innerText = 'Błąd kamery. Sprawdź uprawnienia.';
+        statusEl.innerText = 'Błąd kamery.';
         alert('Brak dostępu do kamery.');
     }
 }
@@ -268,111 +264,82 @@ async function startCamera() {
 // ============================================================
 // POBRANIE KLATKI
 // ============================================================
-function captureFrameFromVideo() {
+function captureFrame() {
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return null;
 
+    // Obszar ramki: 5%-95% szerokości, 25%-75% wysokości
     const sx = Math.floor(vw * 0.05);
-    const sy = Math.floor(vh * 0.20);
+    const sy = Math.floor(vh * 0.25);
     const sw = Math.floor(vw * 0.90);
-    const sh = Math.floor(vh * 0.60);
+    const sh = Math.floor(vh * 0.50);
 
-    captureCanvas.width = sw;
-    captureCanvas.height = sh;
-    capCtx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+    // Powiększ do 2000px szerokości dla lepszego OCR
+    const targetW = 2000;
+    const scale = targetW / sw;
+
+    captureCanvas.width = Math.round(sw * scale);
+    captureCanvas.height = Math.round(sh * scale);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, captureCanvas.width, captureCanvas.height);
+    
     return captureCanvas;
 }
 
 // ============================================================
-// OCR.space API (DARMOWY KLUCZ)
+// OCR.SPACE API (darmowe, bez klucza)
 // ============================================================
-async function recognizeWithOCRspace(imageDataUrl) {
-    const apiKey = 'K81489931088957'; // DARMOWY KLUCZ TESTOWY
-    const url = 'https://api.ocr.space/parse/image';
+async function recognizeWithOCRspace(canvas) {
+    // Konwersja canvas do Base64
+    const dataUrl = canvas.toDataURL('image/png');
+    const base64 = dataUrl.split(',')[1];
 
     const formData = new FormData();
-    formData.append('base64Image', imageDataUrl.split(',')[1]);
-    formData.append('apikey', apiKey);
-    formData.append('language', 'eng');
-    formData.append('OCREngine', '2'); // Engine 2 – lepszy dla tablic
+    formData.append('base64Image', `data:image/png;base64,${base64}`);
+    formData.append('language', 'pol');
+    formData.append('OCREngine', '2');  // Engine 2 = lepszy dla tablic
     formData.append('scale', 'true');
+    formData.append('isTable', 'false');
     formData.append('detectOrientation', 'true');
 
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            body: formData
-        });
-        const data = await response.json();
-        console.log('OCR.space response:', data);
+    // Użyj darmowego klucza "helloworld" – działa!
+    const response = await fetch('https://api.ocr.space/parse/image', {
+        method: 'POST',
+        headers: {
+            'apikey': 'helloworld'
+        },
+        body: formData
+    });
 
-        if (data.IsErroredOnProcessing) {
-            throw new Error(data.ErrorMessage || 'Błąd OCR');
-        }
+    const data = await response.json();
+    console.log('OCR.space response:', data);
 
-        const parsedText = data.ParsedResults?.[0]?.ParsedText || '';
-        return { text: parsedText, confidence: data.ParsedResults?.[0]?.TextOverlay?.Lines?.[0]?.Words?.[0]?.Confidence || 0 };
-    } catch (e) {
-        console.error('OCR.space error:', e);
-        return { text: '', confidence: 0 };
+    if (data.IsErroredOnProcessing) {
+        throw new Error(data.ErrorMessage || 'Błąd OCR');
     }
+
+    const parsedText = data.ParsedResults?.[0]?.ParsedText || '';
+    return parsedText.trim();
 }
 
 // ============================================================
-// CZYSZCZENIE I KOREKTA
+// CZYSZCZENIE I KOREKTA NUMERU
 // ============================================================
-function cleanText(t) {
-    return t.toUpperCase().replace(/[^A-Z0-9]/g, '');
-}
-
-function correctPlate(s) {
-    if (!s || s.length < 4) return null;
-    let v = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (v.length < 4 || v.length > 8) return null;
-
-    let candidates = [];
-    for (let prefLen = 1; prefLen <= Math.min(3, v.length-3); prefLen++) {
-        let pref = v.substring(0, prefLen);
-        let rest = v.substring(prefLen);
-        pref = pref.replace(/0/g, 'O').replace(/1/g, 'I').replace(/2/g, 'Z').replace(/5/g, 'S');
-        rest = rest.replace(/O/g, '0').replace(/I/g, '1').replace(/Z/g, '2').replace(/S/g, '5').replace(/B/g, '8');
-        if (/^[A-Z]{1,3}$/.test(pref) && /^[0-9]{3,5}$/.test(rest)) {
-            candidates.push(pref + rest);
-        }
+function cleanPlate(text) {
+    let cleaned = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    // Korekta typowych błędów
+    cleaned = cleaned.replace(/O/g, '0').replace(/I/g, '1').replace(/Z/g, '2').replace(/S/g, '5');
+    
+    // Szukamy wzorca: litery + cyfry
+    const match = cleaned.match(/^([A-Z]{1,3})([0-9]{3,5})/);
+    if (match) {
+        return match[1] + ' ' + match[2];
     }
-    if (candidates.length === 0) return null;
-    const score = (c) => {
-        const p = c.match(/^[A-Z]+/)[0].length;
-        const n = c.length - p;
-        if (p === 2 && n === 5) return 100;
-        if (p === 2 && n === 4) return 90;
-        if (p === 3 && n === 4) return 80;
-        if (p === 2 && n === 3) return 70;
-        if (p === 1 && n === 5) return 60;
-        return 50;
-    };
-    candidates.sort((a, b) => score(b) - score(a));
-    return candidates[0];
-}
-
-function formatPlate(v) {
-    if (!v) return null;
-    const pref = v.match(/^[A-Z]+/)[0];
-    const rest = v.substring(pref.length);
-    return pref + ' ' + rest;
-}
-
-function correctVIN(s) {
-    let v = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (v.length === 18) {
-        for (let i=0; i<v.length; i++) {
-            const cand = v.substring(0,i) + v.substring(i+1);
-            if (/^[A-HJ-NPR-Z0-9]{17}$/.test(cand)) { v = cand; break; }
-        }
-    }
-    v = v.replace(/O/g,'0').replace(/I/g,'1').replace(/Q/g,'0');
-    if (/^[A-HJ-NPR-Z0-9]{17}$/.test(v)) return v;
-    return null;
+    
+    // Jeśli nie pasuje, zwróć surowy tekst
+    return cleaned;
 }
 
 // ============================================================
@@ -382,93 +349,60 @@ async function scan() {
     if (processing || !cameraReady) return;
     processing = true;
     scanBtn.disabled = true;
-    statusEl.innerText = '📸 Pobieranie klatki...';
+    statusEl.innerText = '📸 Analizowanie...';
 
     try {
-        const canvas = captureFrameFromVideo();
-        if (!canvas) { statusEl.innerText = 'Błąd pobierania klatki.'; return; }
-
-        // Konwersja do base64
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-        statusEl.innerText = '📤 Wysyłanie do OCR.space...';
-        
-        const result = await recognizeWithOCRspace(dataUrl);
-        const cleaned = cleanText(result.text);
-        
-        console.log('Surowe wyniki OCR:', result.text);
-        console.log('Po czyszczeniu:', cleaned);
-
-        if (mode === 'REGISTRATION') {
-            const plate = correctPlate(cleaned);
-            if (plate) {
-                lastPlate = plate;
-                regValue.textContent = formatPlate(plate);
-                regValue.className = 'value';
-                statusEl.textContent = '✅ Odczytano: ' + formatPlate(plate);
-                nextBtn.style.display = 'inline-block';
-                scanBtn.style.display = 'none';
-            } else {
-                statusEl.textContent = '❌ Nie rozpoznano tablicy. Spróbuj ponownie.';
-                regValue.textContent = '—';
-                regValue.className = 'value placeholder';
-            }
-        } else {
-            const vin = correctVIN(cleaned);
-            if (vin) {
-                vinValue.textContent = vin;
-                vinValue.className = 'value';
-                statusEl.textContent = '✅ VIN odczytany: ' + vin;
-                scanBtn.style.display = 'none';
-                nextBtn.style.display = 'none';
-            } else {
-                statusEl.textContent = '❌ Nie rozpoznano VIN. Spróbuj ponownie.';
-                vinValue.textContent = '—';
-                vinValue.className = 'value placeholder';
-            }
+        // Zrób zdjęcie
+        const canvas = captureFrame();
+        if (!canvas) {
+            statusEl.innerText = '❌ Nie udało się pobrać klatki.';
+            return;
         }
+
+        // Wyślij do OCR.space
+        statusEl.innerText = '⏳ Rozpoznawanie...';
+        const rawText = await recognizeWithOCRspace(canvas);
+        
+        console.log('Surowy tekst:', rawText);
+        
+        if (!rawText) {
+            statusEl.innerText = '❌ Nie rozpoznano tekstu. Spróbuj ponownie.';
+            regValue.textContent = '—';
+            regValue.className = 'value placeholder';
+            return;
+        }
+
+        // Wyczyść i sformatuj
+        const plate = cleanPlate(rawText);
+        
+        if (plate && plate.length >= 4) {
+            regValue.textContent = plate;
+            regValue.className = 'value';
+            statusEl.innerText = '✅ Odczytano: ' + plate;
+        } else {
+            statusEl.innerText = '❌ Nie rozpoznano tablicy. Spróbuj ponownie.';
+            regValue.textContent = '—';
+            regValue.className = 'value placeholder';
+        }
+
     } catch (e) {
         console.error('Scan error:', e);
-        statusEl.textContent = '❌ Błąd skanowania. Sprawdź połączenie z internetem.';
+        statusEl.innerText = '❌ Błąd: ' + (e.message || 'Nieznany błąd');
     } finally {
         processing = false;
-        if (mode === 'REGISTRATION') scanBtn.disabled = false;
-        else scanBtn.disabled = false;
+        scanBtn.disabled = false;
     }
 }
 
 // ============================================================
-// PRZEŁĄCZANIE
+// RESET
 // ============================================================
-function switchToVIN() {
-    mode = 'VIN';
-    modeLabel.textContent = 'ETAP 2 — NUMER VIN';
-    modeLabel.style.background = '#1e293b';
-    modeLabel.style.color = '#60a5fa';
-    scanFrame.style.top = '16%';
-    scanFrame.style.height = '68%';
-    statusEl.textContent = 'Ustaw VIN w ramce.';
-    nextBtn.style.display = 'none';
-    scanBtn.style.display = 'inline-block';
-    scanBtn.disabled = false;
-}
-
 function resetAll() {
-    mode = 'REGISTRATION';
-    modeLabel.textContent = 'ETAP 1 — NUMER REJESTRACYJNY';
-    modeLabel.style.background = '#1a2a2a';
-    modeLabel.style.color = '#4ade80';
-    scanFrame.style.top = '22%';
-    scanFrame.style.height = '56%';
     regValue.textContent = '—';
     regValue.className = 'value placeholder';
     vinValue.textContent = '—';
     vinValue.className = 'value placeholder';
-    nextBtn.style.display = 'none';
-    scanBtn.style.display = 'inline-block';
-    if (cameraReady) scanBtn.disabled = false;
-    else scanBtn.disabled = true;
-    statusEl.textContent = 'Gotowy. Ustaw tablicę w ramce.';
-    lastPlate = null;
+    statusEl.innerText = 'Gotowy do skanowania.';
 }
 
 // ============================================================
@@ -476,17 +410,9 @@ function resetAll() {
 // ============================================================
 startBtn.addEventListener('click', startCamera);
 scanBtn.addEventListener('click', scan);
-nextBtn.addEventListener('click', switchToVIN);
 resetBtn.addEventListener('click', resetAll);
 
-// ============================================================
-// START
-// ============================================================
-window.addEventListener('load', () => {
-    engineEl.innerText = '✅ Gotowy. Używa OCR.space (darmowe API)';
-    statusEl.innerText = 'Naciśnij „Uruchom kamerę”';
-});
-
+// Zatrzymaj kamerę przy zamknięciu
 window.addEventListener('beforeunload', () => {
     if (stream) stream.getTracks().forEach(t => t.stop());
 });
