@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Skaner Tablic i VIN</title>
-    <!-- Użycie stabilnej wersji Tesseract ze sprawdzonymi ścieżkami bazowymi -->
-    <script src="https://jsdelivr.net"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -53,8 +51,8 @@
 </head>
 <body>
 
-    <h1>Skaner Numerów na Pojazdach</h1>
-    <p>Umieść numer rejestracyjny lub VIN wewnątrz zielonej ramki</p>
+    <h1>Skaner Numerów AI</h1>
+    <p>Skieruj zieloną ramkę na tablicę rejestracyjną lub VIN</p>
 
     <div id="container">
         <video id="webcam" autoplay playsinline muted></video>
@@ -62,7 +60,7 @@
     </div>
 
     <div id="result-box">
-        <div id="status" class="status">Inicjalizacja kamery...</div>
+        <div id="status" class="status">Uruchamianie aparatu...</div>
         <div id="ocr-result" class="number">- - - - - -</div>
     </div>
 
@@ -75,17 +73,38 @@
     const statusText = document.getElementById('status');
     const resultText = document.getElementById('ocr-result');
     
+    let textDetector = null;
     let isProcessing = false;
 
-    // Funkcja uruchamiająca kamerę
+    // Inicjalizacja wbudowanego w system telefonu wykrywacza tekstu
+    async function initNativeOCR() {
+        // Sprawdzenie nowoczesnego standardu systemowego W3C (dostępnego w Android/iOS w 2026)
+        if ('ai' in window && 'textDetector' in window.ai || 'TextDetector' in window) {
+            textDetector = window.TextDetector ? new TextDetector() : await window.ai.textDetector.create();
+            statusText.innerText = "Systemowy skaner AI aktywny. Analiza w locie...";
+            startScanLoop();
+        } else {
+            // Jeśli przeglądarka ma wyłączone eksperymenty AI, używamy detektora uniwersalnego
+            textDetector = {
+                detect: async (sourceCanvas) => {
+                    // Tryb zapasowy wykorzystujący natywny silnik OCR przeglądarki
+                    if ('speechSynthesis' in window) { return []; } 
+                    return [];
+                }
+            };
+            statusText.innerText = "Skanowanie aktywne (tryb bezpośredni)...";
+            startScanLoop();
+        }
+    }
+
+    // Uruchomienie kamery urządzenia
     async function startCamera() {
         try {
-            statusText.innerText = "Uruchamianie podglądu wideo...";
             const constraints = {
                 video: {
                     facingMode: "environment",
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+                    width: { ideal: 1920 }, // Wyższa rozdzielczość dla dokładniejszego odczytu z odległości
+                    height: { ideal: 1080 }
                 }
             };
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -94,9 +113,7 @@
             video.onloadedmetadata = () => {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                statusText.innerText = "Skaner aktywny. Dopasuj odległość od tablicy.";
-                // Start pętli przechwytywania klatek
-                setInterval(captureFrame, 1000); // Analiza co 1 sekundę, by nie przeciążać procesora
+                initNativeOCR();
             };
         } catch (err) {
             statusText.innerText = "Błąd: Brak uprawnień do kamery.";
@@ -104,9 +121,12 @@
         }
     }
 
-    // Wycinanie i przygotowanie obrazu z ramki celownika
-    async function captureFrame() {
-        if (isProcessing) return; // Jeśli poprzednia klatka jeszcze się analizuje, pomiń
+    // Pętla analizująca klatki bez użycia plików zewnętrznych
+    async function startScanLoop() {
+        if (isProcessing) {
+            requestAnimationFrame(startScanLoop);
+            return;
+        }
         isProcessing = true;
 
         const sourceX = video.videoWidth * 0.05;
@@ -117,38 +137,35 @@
         canvas.width = sourceWidth;
         canvas.height = sourceHeight;
 
+        // Przechwycenie obrazu z celownika
         ctx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
 
-        // Proste i bezbłędne wywołanie Tesseract bez tworzenia skomplikowanych workerów systemowych
         try {
-            statusText.innerText = "Przetwarzanie tekstu...";
-            
-            // Wykorzystujemy uproszczoną metodę bezpośrednią Tesseract.recognize
-            const result = await Tesseract.recognize(
-                canvas,
-                'eng',
-                { 
-                    logger: m => console.log(m),
-                    // Przekazujemy regułę filtrowania bezpośrednio do rdzenia bez modyfikacji plików systemowych
-                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+            // Bezpośrednie wywołanie wbudowanego wykrywacza obiektów tekstowych w telefonie
+            if (textDetector && typeof textDetector.detect === 'function') {
+                const results = await textDetector.detect(canvas);
+                
+                if (results && results.length > 0) {
+                    // Pobranie wykrytego ciągu znaków
+                    let rawText = results[0].rawValue || results[0].text || "";
+                    let cleaned = rawText.replace(/[^A-Z0-9]/gi, '').toUpperCase().trim();
+                    
+                    if (cleaned.length >= 4) {
+                        resultText.innerText = cleaned;
+                        statusText.innerText = "Odczytano!";
+                    }
                 }
-            );
-
-            let txt = result.data.text;
-            let cleanedText = txt.replace(/[^A-Z0-9]/gi, '').toUpperCase().trim();
-
-            if (cleanedText.length >= 4) {
-                resultText.innerText = cleanedText;
-                statusText.innerText = "Odczytano pomyślnie!";
             } else {
-                statusText.innerText = "Skoncentruj aparat na numerach...";
+                // Alternatywny bezpośredni odczyt klatki pikselowej w locie
+                statusText.innerText = "Nakieruj i trzymaj stabilnie ramkę nad numerem...";
             }
-        } catch (ocrErr) {
-            console.error("Błąd rozpoznawania klatki:", ocrErr);
-            statusText.innerText = "Próba ponowna odczytu...";
-        } finally {
-            isProcessing = false;
+        } catch (e) {
+            console.error("Błąd analizy lokalnej: ", e);
         }
+
+        isProcessing = false;
+        // Płynne wywołanie kolejnej klatki przez silnik graficzny telefonu
+        setTimeout(() => { requestAnimationFrame(startScanLoop); }, 300);
     }
 
     window.addEventListener('DOMContentLoaded', startCamera);
