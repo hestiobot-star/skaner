@@ -4,9 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Skaner rejestracji</title>
-  <!-- OpenCV.js -->
   <script async src="https://docs.opencv.org/4.13.0/opencv.js"></script>
-  <!-- Tesseract.js -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -20,10 +18,7 @@
       flex-direction: column;
       align-items: center;
     }
-    .container {
-      max-width: 720px;
-      width: 100%;
-    }
+    .container { max-width: 720px; width: 100%; }
     h1 {
       font-size: 28px;
       font-weight: 300;
@@ -35,12 +30,7 @@
       justify-content: center;
     }
     h1 span { background: #1f2937; padding: 0 14px; border-radius: 30px; font-size: 16px; font-weight: 400; }
-    .sub {
-      color: #9ca3af;
-      font-size: 14px;
-      margin-bottom: 18px;
-      text-align: center;
-    }
+    .sub { color: #9ca3af; font-size: 14px; margin-bottom: 18px; text-align: center; }
     #modeLabel {
       display: inline-block;
       padding: 6px 20px;
@@ -70,10 +60,10 @@
     }
     #scanFrame {
       position: absolute;
-      left: 5%;
-      width: 90%;
-      top: 30%;
-      height: 45%;
+      left: 6%;
+      width: 88%;
+      top: 20%;
+      height: 60%;
       border: 2.5px solid #4ade80;
       border-radius: 12px;
       box-shadow: 0 0 25px rgba(74, 222, 128, 0.4), inset 0 0 20px rgba(74,222,128,0.1);
@@ -93,20 +83,20 @@
     .corner.br { bottom: -3px; right: -3px; border-width: 0 4px 4px 0; }
     #scanLine {
       position: absolute;
-      left: 6%;
-      width: 88%;
+      left: 7%;
+      width: 86%;
       height: 2px;
       background: #4ade80;
       box-shadow: 0 0 12px #4ade80;
-      top: 32%;
+      top: 22%;
       animation: scan 2.2s ease-in-out infinite;
       pointer-events: none;
       border-radius: 2px;
     }
     @keyframes scan {
-      0% { top: 32%; }
-      50% { top: 72%; }
-      100% { top: 32%; }
+      0% { top: 22%; }
+      50% { top: 78%; }
+      100% { top: 22%; }
     }
     #status {
       min-height: 28px;
@@ -191,9 +181,7 @@
 <div class="container">
   <h1>🚗 Skaner <span>rejestracji</span></h1>
   <div class="sub">Zeskanuj numer rejestracyjny, następnie VIN</div>
-
   <div id="modeLabel">ETAP 1 — NUMER REJESTRACYJNY</div>
-
   <div class="camera-box">
     <video id="video" autoplay muted playsinline></video>
     <div id="scanFrame">
@@ -204,16 +192,13 @@
     </div>
     <div id="scanLine"></div>
   </div>
-
   <div id="status">Naciśnij „Uruchom kamerę”</div>
-
   <div class="btn-group">
     <button id="startBtn">📷 Kamera</button>
     <button id="scanBtn" disabled>🔍 Skanuj</button>
     <button id="nextBtn">➡️ VIN</button>
     <button id="resetBtn">↺ Reset</button>
   </div>
-
   <div class="results">
     <div class="card">
       <div class="title">Numer rejestracyjny</div>
@@ -224,7 +209,6 @@
       <div class="value placeholder" id="vinValue">—</div>
     </div>
   </div>
-
   <div id="engineStatus">Inicjalizacja silników...</div>
 </div>
 
@@ -258,10 +242,9 @@ let cameraReady = false;
 let ocrReady = false;
 let cvReady = false;
 let processing = false;
-let mode = 'REGISTRATION'; // lub 'VIN'
+let mode = 'REGISTRATION';
 let stream = null;
 let worker = null;
-let frameBuffer = [];
 
 // ============================================================
 // OPENCV
@@ -296,7 +279,7 @@ async function initOCR() {
     });
     await worker.setParameters({
       tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-      tessedit_pageseg_mode: '7'    // pojedynczy wiersz tekstu
+      tessedit_pageseg_mode: '6'  // blok tekstu – lepszy dla tablic
     });
     ocrReady = true;
     engineEl.innerText = 'OpenCV + Tesseract: GOTOWE';
@@ -338,28 +321,20 @@ async function startCamera() {
 }
 
 // ============================================================
-// POBRANIE KLATKI Z RAMKI
+// POBRANIE KLATKI Z RAMKI (większy obszar)
 // ============================================================
 function captureFrameFromVideo() {
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw || !vh) return null;
 
-  let yRatio, hRatio;
-  if (mode === 'REGISTRATION') {
-    yRatio = 0.28;
-    hRatio = 0.48;
-  } else {
-    yRatio = 0.25;
-    hRatio = 0.50;
-  }
+  // obszar: 20% – 80% wysokości, 6% – 94% szerokości
+  const sx = Math.floor(vw * 0.06);
+  const sy = Math.floor(vh * 0.20);
+  const sw = Math.floor(vw * 0.88);
+  const sh = Math.floor(vh * 0.60);
 
-  const sx = Math.floor(vw * 0.05);
-  const sy = Math.floor(vh * yRatio);
-  const sw = Math.floor(vw * 0.90);
-  const sh = Math.floor(vh * hRatio);
-
-  // docelowa szerokość do OCR (większa = lepsza)
-  const targetW = mode === 'REGISTRATION' ? 1200 : 1400;
+  // docelowa szerokość (większa = lepsza)
+  const targetW = 2000;
   const scale = targetW / sw;
 
   const canvas = document.createElement('canvas');
@@ -381,7 +356,6 @@ function sharpnessScore(canvas) {
   const imageData = ctx.getImageData(0, 0, w, h);
   const data = imageData.data;
   let sum = 0, n = 0;
-  // uproszczony Laplacian w skali szarości
   for (let y = 1; y < h-1; y++) {
     for (let x = 1; x < w-1; x++) {
       const idx = (y * w + x) * 4;
@@ -396,28 +370,35 @@ function sharpnessScore(canvas) {
 }
 
 // ============================================================
-// PRZETWARZANIE OPENCV (wyostrzanie + binaryzacja)
+// PRZETWARZANIE OPENCV – 3 warianty
 // ============================================================
-function preprocessWithCV(srcCanvas) {
-  let src = null, gray = null, blurred = null, sharp = null, result = null;
+function preprocessWithCV(srcCanvas, variant) {
+  let src = null, gray = null, result = null, clahe = null;
   try {
     src = cv.imread(srcCanvas);
     gray = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-    // lekkie rozmycie
-    blurred = new cv.Mat();
-    cv.GaussianBlur(gray, blurred, new cv.Size(3,3), 0);
-    // wyostrzanie (kernel)
-    sharp = new cv.Mat();
-    const kernel = cv.Mat.ones(3,3, cv.CV_32F);
-    kernel.data[0] = 0; kernel.data[1] = -1; kernel.data[2] = 0;
-    kernel.data[3] = -1; kernel.data[4] = 5; kernel.data[5] = -1;
-    kernel.data[6] = 0; kernel.data[7] = -1; kernel.data[8] = 0;
-    cv.filter2D(blurred, sharp, -1, kernel);
-    // adaptacyjna binaryzacja
-    result = new cv.Mat();
-    cv.adaptiveThreshold(sharp, result, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 9);
-    // zapis do canvas
+
+    if (variant === 'ADAPTIVE') {
+      result = new cv.Mat();
+      cv.adaptiveThreshold(gray, result, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 10);
+    } else if (variant === 'OTSU') {
+      result = new cv.Mat();
+      cv.threshold(gray, result, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
+    } else if (variant === 'CLAHE') {
+      clahe = new cv.CLAHE(2.5, new cv.Size(8,8));
+      result = new cv.Mat();
+      clahe.apply(gray, result);
+      // dodatkowo binaryzacja OTSU po CLAHE
+      const tmp = new cv.Mat();
+      cv.threshold(result, tmp, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
+      result.delete();
+      result = tmp;
+    } else {
+      // fallback – bez przetwarzania (tylko szary)
+      result = gray.clone();
+    }
+
     procCanvas.width = result.cols;
     procCanvas.height = result.rows;
     cv.imshow(procCanvas, result);
@@ -429,23 +410,16 @@ function preprocessWithCV(srcCanvas) {
   } finally {
     if (src) src.delete();
     if (gray) gray.delete();
-    if (blurred) blurred.delete();
-    if (sharp) sharp.delete();
+    if (clahe) clahe.delete();
     if (result) result.delete();
   }
 }
 
 // ============================================================
-// OCR Z PRZETWARZANIEM
+// OCR NA POJEDYNCZYM OBRAZIE
 // ============================================================
 async function recognizePlate(canvas) {
-  let processed;
-  if (cvReady) {
-    processed = preprocessWithCV(canvas);
-  } else {
-    processed = canvas;
-  }
-  const result = await worker.recognize(processed);
+  const result = await worker.recognize(canvas);
   const text = result?.data?.text || '';
   const confidence = Number(result?.data?.confidence || 0);
   return { raw: text, cleaned: cleanText(text), confidence };
@@ -460,11 +434,9 @@ function cleanText(t) {
 // ============================================================
 function correctPlate(s) {
   if (!s || s.length < 4) return null;
-  // usuwamy nieznaki
   let v = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (v.length < 4 || v.length > 8) return null;
 
-  // próba korekty typowych błędów
   let candidates = [];
   for (let prefLen = 1; prefLen <= Math.min(3, v.length-3); prefLen++) {
     let pref = v.substring(0, prefLen);
@@ -476,7 +448,6 @@ function correctPlate(s) {
     }
   }
   if (candidates.length === 0) return null;
-  // wybierz najlepszy format
   const score = (c) => {
     const p = c.match(/^[A-Z]+/)[0].length;
     const n = c.length - p;
@@ -515,7 +486,7 @@ function correctVIN(s) {
 }
 
 // ============================================================
-// SKANOWANIE WIELU KLATEK
+// SKANOWANIE WIELU KLATEK – Z WIELOMA WARIANTAMI
 // ============================================================
 async function scanMultipleFrames() {
   if (processing || !cameraReady || !ocrReady) return;
@@ -524,32 +495,47 @@ async function scanMultipleFrames() {
   statusEl.innerText = 'Zbieranie klatek...';
 
   try {
-    // zbierz 10 klatek
+    // Zbierz 15 klatek
     const frames = [];
-    for (let i=0; i<10; i++) {
+    for (let i=0; i<15; i++) {
       const c = captureFrameFromVideo();
       if (c) {
         const score = sharpnessScore(c);
         frames.push({ canvas: c, score });
       }
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 200));
     }
     if (frames.length === 0) { statusEl.innerText = 'Nie udało się pobrać klatek.'; return; }
 
-    // posortuj po ostrości, weź najlepsze 3
+    // Wybierz 5 najlepszych (najostrzejszych)
     frames.sort((a,b) => b.score - a.score);
-    const topFrames = frames.slice(0, 3);
+    const topFrames = frames.slice(0, 5);
 
-    statusEl.innerText = 'Analizowanie...';
-    const results = [];
+    statusEl.innerText = 'Analizowanie (3 warianty)...';
+    const allResults = [];
+
     for (const f of topFrames) {
-      const res = await recognizePlate(f.canvas);
-      results.push(res);
+      const variants = [];
+      if (cvReady) {
+        variants.push('ADAPTIVE', 'OTSU', 'CLAHE');
+      } else {
+        variants.push('RAW'); // tylko oryginał
+      }
+      for (const v of variants) {
+        let processed;
+        if (cvReady && v !== 'RAW') {
+          processed = preprocessWithCV(f.canvas, v);
+        } else {
+          processed = f.canvas; // używamy oryginału
+        }
+        const ocrResult = await recognizePlate(processed);
+        allResults.push({ ...ocrResult, variant: v, sharpness: f.score });
+      }
     }
 
     // Wybierz najlepszy wynik dla rejestracji lub VIN
     if (mode === 'REGISTRATION') {
-      const best = selectBestPlate(results);
+      const best = selectBestPlate(allResults);
       if (best) {
         regValue.textContent = formatPlate(best);
         regValue.className = 'value';
@@ -562,7 +548,7 @@ async function scanMultipleFrames() {
         regValue.className = 'value placeholder';
       }
     } else {
-      const best = selectBestVIN(results);
+      const best = selectBestVIN(allResults);
       if (best) {
         vinValue.textContent = best;
         vinValue.className = 'value';
@@ -588,10 +574,10 @@ async function scanMultipleFrames() {
 function selectBestPlate(results) {
   const candidates = [];
   for (const r of results) {
-    const cleaned = cleanText(r.raw);
-    const corrected = correctPlate(cleaned);
+    const corrected = correctPlate(r.cleaned);
     if (!corrected) continue;
     let score = r.confidence || 0;
+    // premia za format
     const p = corrected.match(/^[A-Z]+/)[0].length;
     const n = corrected.length - p;
     if (p === 2 && n === 5) score += 40;
@@ -599,6 +585,8 @@ function selectBestPlate(results) {
     else if (p === 3 && n === 4) score += 25;
     else if (p === 2 && n === 3) score += 20;
     else if (p === 1 && n === 5) score += 10;
+    // niewielka premia za ostrość
+    score += (r.sharpness || 0) * 0.001;
     candidates.push({ value: corrected, score });
   }
   if (candidates.length === 0) return null;
@@ -609,11 +597,10 @@ function selectBestPlate(results) {
 function selectBestVIN(results) {
   const candidates = [];
   for (const r of results) {
-    const cleaned = cleanText(r.raw);
-    const corrected = correctVIN(cleaned);
+    const corrected = correctVIN(r.cleaned);
     if (!corrected) continue;
     let score = r.confidence || 0;
-    score += 50; // premia za poprawny VIN
+    score += 50;
     candidates.push({ value: corrected, score });
   }
   if (candidates.length === 0) return null;
@@ -629,8 +616,8 @@ function switchToVIN() {
   modeLabel.textContent = 'ETAP 2 — NUMER VIN';
   modeLabel.style.background = '#1e293b';
   modeLabel.style.color = '#60a5fa';
-  scanFrame.style.top = '24%';
-  scanFrame.style.height = '52%';
+  scanFrame.style.top = '18%';
+  scanFrame.style.height = '64%';
   statusEl.textContent = 'Ustaw VIN w ramce.';
   nextBtn.style.display = 'none';
   scanBtn.style.display = 'inline-block';
@@ -642,8 +629,8 @@ function resetAll() {
   modeLabel.textContent = 'ETAP 1 — NUMER REJESTRACYJNY';
   modeLabel.style.background = '#1a2a2a';
   modeLabel.style.color = '#4ade80';
-  scanFrame.style.top = '28%';
-  scanFrame.style.height = '48%';
+  scanFrame.style.top = '20%';
+  scanFrame.style.height = '60%';
   regValue.textContent = '—';
   regValue.className = 'value placeholder';
   vinValue.textContent = '—';
