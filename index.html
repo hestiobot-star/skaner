@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Skaner Numerów Pojazdów</title>
-    <!-- Ładowanie oficjalnej biblioteki Tesseract.js z zaufanego źródła CDN -->
+    <!-- Oficjalny link do najnowszej wersji biblioteki rozpoznawania tekstu -->
     <script src="https://jsdelivr.net"></script>
     <style>
         body {
@@ -26,8 +26,9 @@
         video {
             width: 100%;
             display: block;
+            transform: scaleX(1); /* Standardowy widok z tylnej kamery */
         }
-        /* Ramka celownika pomagająca użytkownikowi najechać na numer */
+        /* Zielona ramka celownika na środku ekranu */
         .scanner-laser {
             position: absolute;
             top: 40%;
@@ -47,9 +48,9 @@
             border-radius: 8px;
             border: 1px solid #333;
         }
-        .status { color: #aaa; font-style: italic; }
-        .number { font-size: 24px; font-weight: bold; color: #00ff00; margin-top: 10px; letter-spacing: 2px; }
-        canvas { display: none; } /* Ukryte przetwarzanie obrazu */
+        .status { color: #aaa; font-style: italic; font-size: 16px; }
+        .number { font-size: 28px; font-weight: bold; color: #00ff00; margin-top: 10px; letter-spacing: 2px; }
+        canvas { display: none; } /* Ukryte cyfrowe przetwarzanie obrazu */
     </style>
 </head>
 <body>
@@ -67,7 +68,6 @@
         <div id="ocr-result" class="number">- - - - - -</div>
     </div>
 
-    <!-- Canvas do przetwarzania kontrastu klatek wideo -->
     <canvas id="processing-canvas"></canvas>
 
 <script>
@@ -80,46 +80,62 @@
     let worker = null;
     let isScanning = false;
 
-    // 1. Inicjalizacja Silnika OCR Tesseract
+    // Poprawna inicjalizacja silnika OCR krok po kroku
     async function initOCR() {
-        statusText.innerText = "Ładowanie silnika rozpoznawania tekstu...";
-        worker = await Tesseract.createWorker('pol+eng'); // Obsługa polskich i angielskich czcionek
-        statusText.innerText = "Skaner gotowy. Nakieruj na pojazd.";
-        isScanning = true;
-        startScanLoop();
+        try {
+            statusText.innerText = "Ładowanie silnika OCR...";
+            
+            // Tworzenie instancji w nowej strukturze v5
+            worker = await Tesseract.createWorker();
+            
+            // Konfiguracja języków (polski i angielski)
+            await worker.loadLanguage('pol+eng');
+            await worker.initialize('pol+eng');
+            
+            // Ustawienie parametrów silnika, aby szukał tylko wielkich liter i cyfr (przydatne przy rejestracjach/VIN)
+            await worker.setParameters({
+                tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+            });
+
+            statusText.innerText = "Skaner gotowy. Nakieruj na pojazd.";
+            isScanning = true;
+            startScanLoop();
+        } catch (ocrError) {
+            statusText.innerText = "Błąd inicjalizacji silnika tekstowego. Odśwież stronę.";
+            console.error(ocrError);
+        }
     }
 
-    // 2. Uruchomienie Kamery z optymalnymi parametrami dla pojazdów
+    // Uruchomienie strumienia wideo z tylnej kamery w jakości HD
     async function startCamera() {
         try {
             const constraints = {
                 video: {
-                    facingMode: "environment", // Wymuszenie tylnej kamery w telefonie
-                    width: { ideal: 1920 },    // Wysoka jakość dla ostrego tekstu
-                    height: { ideal: 1080 },
-                    focusMode: "continuous"    // Próba wymuszenia ciągłego autofocusu
+                    facingMode: "environment", // Wymuszenie tylnego obiektywu w telefonie
+                    width: { ideal: 1280 },    
+                    height: { ideal: 720 },
+                    focusMode: "continuous"    // Włączenie ciągłego autofocusu
                 }
             };
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             video.srcObject = stream;
             
-            // Po uruchomieniu wideo, inicjalizuj tekst
             video.onloadedmetadata = () => {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                initOCR();
+                initOCR(); // Uruchomienie rozpoznawania dopiero po włączeniu kamery
             };
         } catch (err) {
-            statusText.innerText = "Błąd kamery: Brak uprawnień lub brak kamery w urządzeniu.";
+            statusText.innerText = "Błąd kamery: Brak uprawnień lub urządzenie jest używane przez inną aplikację.";
             console.error(err);
         }
     }
 
-    // 3. Pętla przetwarzania obrazu i skanowania na żywo
+    // Analiza klatek obrazu w locie
     async function startScanLoop() {
         if (!isScanning) return;
 
-        // Kopiujemy tylko obszar z zielonej ramki (środek ekranu), aby przyspieszyć działanie
+        // Wycinamy tylko obszar znajdujący się w zielonej ramce (oszczędność procesora)
         const sourceX = video.videoWidth * 0.1;
         const sourceY = video.videoHeight * 0.4;
         const sourceWidth = video.videoWidth * 0.8;
@@ -128,49 +144,47 @@
         canvas.width = sourceWidth;
         canvas.height = sourceHeight;
 
-        // Rysowanie kadru na ukrytym canvasie
+        // Narysowanie wyciętego kadru na ukrytym płótnie canvas
         ctx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
 
-        // FILTR KONTRASTU: Przekształcenie obrazu na czarno-biały (Binaryzacja progowa)
-        // Ekstremalnie poprawia czytelność brudnych lub odblaskowych tablic rejestracyjnych
+        // Nakładanie filtra binarnego (zwiększenie kontrastu czerni i bieli)
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imgData.data;
         for (let i = 0; i < data.length; i += 4) {
             let brightness = 0.34 * data[i] + 0.5 * data[i + 1] + 0.16 * data[i + 2];
-            // Próg odcięcia: jeśli punkt jest ciemny -> zrób idealnie czarny, jeśli jasny -> idealnie biały
-            let threshold = 120; 
+            let threshold = 125; // Próg odcięcia światła
             let color = brightness > threshold ? 255 : 0;
-            data[i] = color;     // R
-            data[i+1] = color;   // G
-            data[i+2] = color;   // B
+            data[i] = color;     
+            data[i+1] = color;   
+            data[i+2] = color;   
         }
         ctx.putImageData(imgData, 0, 0);
 
-        // Pobranie przetworzonego obrazu jako bazy do odczytu tekstowego
         const dataUrl = canvas.toDataURL('image/png');
 
         try {
-            statusText.innerText = "Analizowanie obrazu...";
+            // Przekazanie przetworzonego obrazu o wysokim kontraście bezpośrednio do biblioteki
             const { data: { text } } = await worker.recognize(dataUrl);
             
-            // Oczyszczanie wyniku ze znaków specjalnych, spacji i śmieci tekstowych
-            let cleanedText = text.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+            // Oczyszczenie tekstu z ewentualnych spacji lub znaków specjalnych
+            let cleanedText = text.replace(/[^A-Z0-9]/gi, '').toUpperCase().trim();
 
-            if (cleanedText.length >= 4) { // Wyświetlaj tylko jeśli odczytano realną sekwencję znaków
+            // Akceptujemy odczyt, jeśli ma przynajmniej 4 znaki
+            if (cleanedText.length >= 4) { 
                 resultText.innerText = cleanedText;
                 statusText.innerText = "Odczytano pomyślnie!";
             } else {
                 statusText.innerText = "Szukam numerów... Dopasuj pozycję.";
             }
         } catch (e) {
-            console.error(e);
+            console.error("Błąd skanowania klatki: ", e);
         }
 
-        // Odczekaj 500ms przed kolejną próbą, aby nie zawiesić telefonu/przeglądarki
-        setTimeout(startScanLoop, 500);
+        // Kolejna klatka za 600ms, aby telefon działał płynnie i nie przegrzewał się
+        setTimeout(startScanLoop, 600);
     }
 
-    // Uruchomienie skanera po załadowaniu strony
+    // Uruchomienie skanera po załadowaniu struktury strony
     window.addEventListener('DOMContentLoaded', startCamera);
 </script>
 </body>
