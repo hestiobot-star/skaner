@@ -1,849 +1,458 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Rządowy Skaner Rejestracji</title>
-    
-    <!-- OpenCV.js -->
-    <script async src="https://docs.opencv.org/4.13.0/opencv.js"></script>
-    
-    <!-- Tesseract.js v4 (najnowsza) -->
-    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js'></script>
-    
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            background: #0a0c10;
-            color: #e0e0e0;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            padding: 16px;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .container {
-            max-width: 720px;
-            width: 100%;
-        }
-        .header {
-            background: linear-gradient(135deg, #1a1f2e, #0d1117);
-            border-radius: 20px;
-            padding: 20px 24px;
-            margin-bottom: 20px;
-            border: 1px solid #2d3349;
-        }
-        h1 {
-            font-size: 26px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: #fff;
-        }
-        h1 .badge {
-            background: #dc2626;
-            font-size: 12px;
-            padding: 2px 12px;
-            border-radius: 30px;
-            font-weight: 400;
-            letter-spacing: 0.5px;
-        }
-        .sub {
-            color: #9ca3af;
-            font-size: 14px;
-            margin-top: 6px;
-        }
-        #modeLabel {
-            display: inline-block;
-            padding: 6px 20px;
-            border-radius: 40px;
-            background: #1a2a2a;
-            color: #4ade80;
-            font-weight: 600;
-            font-size: 14px;
-            margin-bottom: 12px;
-            border: 1px solid #2d4a3a;
-        }
-        .camera-box {
-            position: relative;
-            width: 100%;
-            background: #000;
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.8);
-            aspect-ratio: 16/9;
-        }
-        #video {
-            width: 100%;
-            display: block;
-            background: #111;
-            aspect-ratio: 16/9;
-            object-fit: cover;
-        }
-        #scanFrame {
-            position: absolute;
-            left: 5%;
-            width: 90%;
-            top: 22%;
-            height: 56%;
-            border: 2.5px solid #4ade80;
-            border-radius: 12px;
-            box-shadow: 0 0 30px rgba(74,222,128,0.3), inset 0 0 30px rgba(74,222,128,0.05);
-            pointer-events: none;
-            transition: all 0.3s ease;
-        }
-        .corner {
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            border-color: #fff;
-            border-style: solid;
-        }
-        .corner.tl { top: -2px; left: -2px; border-width: 3px 0 0 3px; }
-        .corner.tr { top: -2px; right: -2px; border-width: 3px 3px 0 0; }
-        .corner.bl { bottom: -2px; left: -2px; border-width: 0 0 3px 3px; }
-        .corner.br { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; }
-        #scanLine {
-            position: absolute;
-            left: 6%;
-            width: 88%;
-            height: 2px;
-            background: #4ade80;
-            box-shadow: 0 0 15px #4ade80;
-            top: 24%;
-            animation: scan 2.5s ease-in-out infinite;
-            pointer-events: none;
-            border-radius: 2px;
-        }
-        @keyframes scan {
-            0% { top: 24%; opacity: 0.6; }
-            50% { top: 76%; opacity: 1; }
-            100% { top: 24%; opacity: 0.6; }
-        }
-        #status {
-            min-height: 28px;
-            margin: 16px 0 12px;
-            font-size: 15px;
-            color: #fbbf24;
-            text-align: center;
-            font-weight: 500;
-            background: rgba(0,0,0,0.3);
-            padding: 8px 16px;
-            border-radius: 10px;
-        }
-        .btn-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-            margin: 8px 0 16px;
-        }
-        button {
-            border: none;
-            border-radius: 50px;
-            padding: 12px 24px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            color: #fff;
-            background: #374151;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            flex: 1 1 auto;
-            min-width: 100px;
-        }
-        button:disabled { opacity: 0.4; cursor: default; transform: none; }
-        button:active:not(:disabled) { transform: scale(0.95); }
-        #startBtn { background: #16a34a; }
-        #scanBtn { background: #2563eb; }
-        #nextBtn { background: #d97706; display: none; }
-        #resetBtn { background: #6b7280; }
-        #manualBtn { background: #7c3aed; display: none; }
-        .results {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
-            margin: 12px 0;
-        }
-        .card {
-            background: #181b20;
-            border: 1px solid #2a2f36;
-            border-radius: 14px;
-            padding: 16px 18px;
-            transition: border-color 0.3s;
-        }
-        .card .title {
-            color: #9ca3af;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-        .card .value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #4ade80;
-            letter-spacing: 1px;
-            word-break: break-all;
-            min-height: 36px;
-            font-family: 'Courier New', monospace;
-        }
-        .card .value.placeholder { color: #6b7280; font-weight: 300; }
-        .card .value.error { color: #ef4444; }
-        #engineStatus {
-            margin-top: 10px;
-            color: #6b7280;
-            font-size: 12px;
-            text-align: center;
-            font-family: monospace;
-        }
-        .debug-info {
-            background: #0d1117;
-            border: 1px solid #2d3349;
-            border-radius: 10px;
-            padding: 12px;
-            margin-top: 12px;
-            font-size: 12px;
-            color: #6b7280;
-            max-height: 100px;
-            overflow-y: auto;
-            font-family: monospace;
-            display: none;
-        }
-        canvas { display: none; }
-        @media (max-width: 550px) {
-            .results { grid-template-columns: 1fr; }
-            button { min-width: 80px; padding: 10px 14px; font-size: 13px; }
-            .header { padding: 16px; }
-            h1 { font-size: 22px; }
-        }
-        /* Animacja dla udanego skanowania */
-        @keyframes pulse-green {
-            0% { border-color: #4ade80; box-shadow: 0 0 20px rgba(74,222,128,0.3); }
-            50% { border-color: #22c55e; box-shadow: 0 0 40px rgba(74,222,128,0.6); }
-            100% { border-color: #4ade80; box-shadow: 0 0 20px rgba(74,222,128,0.3); }
-        }
-        .scan-success {
-            animation: pulse-green 0.8s ease 2;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Skaner Rejestracji (OCR.space)</title>
+  <style>
+    /* (stylizacja taka sama jak poprzednio) */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0c10;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .container { max-width: 720px; width: 100%; }
+    .header {
+      background: linear-gradient(135deg, #1a1f2e, #0d1117);
+      border-radius: 20px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      border: 1px solid #2d3349;
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #fff;
+    }
+    h1 .badge {
+      background: #2563eb;
+      font-size: 12px;
+      padding: 2px 12px;
+      border-radius: 30px;
+      font-weight: 400;
+    }
+    .sub { color: #9ca3af; font-size: 14px; margin-top: 6px; }
+    #modeLabel {
+      display: inline-block;
+      padding: 6px 20px;
+      border-radius: 40px;
+      background: #1a2a2a;
+      color: #4ade80;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 12px;
+      border: 1px solid #2d4a3a;
+    }
+    .camera-box {
+      position: relative;
+      width: 100%;
+      background: #000;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+      aspect-ratio: 16/9;
+    }
+    #video {
+      width: 100%;
+      display: block;
+      background: #111;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+    }
+    #scanFrame {
+      position: absolute;
+      left: 5%;
+      width: 90%;
+      top: 22%;
+      height: 56%;
+      border: 2.5px solid #4ade80;
+      border-radius: 12px;
+      box-shadow: 0 0 30px rgba(74,222,128,0.3);
+      pointer-events: none;
+    }
+    .corner {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-color: #fff;
+      border-style: solid;
+    }
+    .corner.tl { top: -2px; left: -2px; border-width: 3px 0 0 3px; }
+    .corner.tr { top: -2px; right: -2px; border-width: 3px 3px 0 0; }
+    .corner.bl { bottom: -2px; left: -2px; border-width: 0 0 3px 3px; }
+    .corner.br { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; }
+    #scanLine {
+      position: absolute;
+      left: 6%;
+      width: 88%;
+      height: 2px;
+      background: #4ade80;
+      box-shadow: 0 0 15px #4ade80;
+      top: 24%;
+      animation: scan 2.5s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes scan {
+      0% { top: 24%; opacity: 0.6; }
+      50% { top: 76%; opacity: 1; }
+      100% { top: 24%; opacity: 0.6; }
+    }
+    #status {
+      min-height: 28px;
+      margin: 16px 0 12px;
+      font-size: 15px;
+      color: #fbbf24;
+      text-align: center;
+      font-weight: 500;
+      background: rgba(0,0,0,0.3);
+      padding: 8px 16px;
+      border-radius: 10px;
+    }
+    .btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin: 8px 0 16px;
+    }
+    button {
+      border: none;
+      border-radius: 50px;
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #fff;
+      background: #374151;
+      flex: 1 1 auto;
+      min-width: 100px;
+    }
+    button:disabled { opacity: 0.4; cursor: default; }
+    button:active:not(:disabled) { transform: scale(0.95); }
+    #startBtn { background: #16a34a; }
+    #scanBtn { background: #2563eb; }
+    #resetBtn { background: #6b7280; }
+    .results {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin: 12px 0;
+    }
+    .card {
+      background: #181b20;
+      border: 1px solid #2a2f36;
+      border-radius: 14px;
+      padding: 16px 18px;
+    }
+    .card .title {
+      color: #9ca3af;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .card .value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #4ade80;
+      letter-spacing: 1px;
+      word-break: break-all;
+      min-height: 36px;
+    }
+    .card .value.placeholder { color: #6b7280; font-weight: 300; }
+    #engineStatus {
+      margin-top: 10px;
+      color: #6b7280;
+      font-size: 12px;
+      text-align: center;
+    }
+    canvas { display: none; }
+    @media (max-width: 550px) {
+      .results { grid-template-columns: 1fr; }
+      button { min-width: 80px; padding: 10px 14px; font-size: 13px; }
+    }
+  </style>
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        <h1>
-            🚗 Skaner Rejestracji
-            <span class="badge">RZĄDOWY</span>
-        </h1>
-        <div class="sub">System rozpoznawania tablic rejestracyjnych i VIN</div>
+  <div class="header">
+    <h1>🚗 Skaner <span class="badge">OCR.space</span></h1>
+    <div class="sub">Rozpoznawanie tablic rejestracyjnych</div>
+  </div>
+  <div id="modeLabel">NUMER REJESTRACYJNY</div>
+  <div class="camera-box">
+    <video id="video" autoplay muted playsinline></video>
+    <div id="scanFrame">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
     </div>
-
-    <div id="modeLabel">ETAP 1 — NUMER REJESTRACYJNY</div>
-
-    <div class="camera-box">
-        <video id="video" autoplay muted playsinline></video>
-        <div id="scanFrame">
-            <div class="corner tl"></div>
-            <div class="corner tr"></div>
-            <div class="corner bl"></div>
-            <div class="corner br"></div>
-        </div>
-        <div id="scanLine"></div>
+    <div id="scanLine"></div>
+  </div>
+  <div id="status">▶️ Naciśnij „Uruchom kamerę”</div>
+  <div class="btn-group">
+    <button id="startBtn">📷 Kamera</button>
+    <button id="scanBtn" disabled>🔍 Skanuj</button>
+    <button id="resetBtn">↺ Reset</button>
+  </div>
+  <div class="results">
+    <div class="card">
+      <div class="title">Numer rejestracyjny</div>
+      <div class="value placeholder" id="regValue">—</div>
     </div>
-
-    <div id="status">▶️ Naciśnij „Uruchom kamerę”</div>
-
-    <div class="btn-group">
-        <button id="startBtn">📷 Kamera</button>
-        <button id="scanBtn" disabled>🔍 Skanuj</button>
-        <button id="nextBtn">➡️ VIN</button>
-        <button id="resetBtn">↺ Reset</button>
-        <button id="manualBtn">✏️ Ręczna korekta</button>
-    </div>
-
-    <div class="results">
-        <div class="card">
-            <div class="title">Numer rejestracyjny</div>
-            <div class="value placeholder" id="regValue">—</div>
-        </div>
-        <div class="card">
-            <div class="title">VIN</div>
-            <div class="value placeholder" id="vinValue">—</div>
-        </div>
-    </div>
-
-    <div id="engineStatus">⏳ Inicjalizacja silników...</div>
-    <div class="debug-info" id="debugInfo"></div>
+  </div>
+  <div id="engineStatus">⏳ Inicjalizacja...</div>
 </div>
 
 <canvas id="captureCanvas"></canvas>
-<canvas id="procCanvas"></canvas>
 
 <script>
 // ============================================================
-// 1. ELEMENTY I STAN
+// ELEMENTY
 // ============================================================
 const video = document.getElementById('video');
 const statusEl = document.getElementById('status');
 const engineEl = document.getElementById('engineStatus');
-const modeLabel = document.getElementById('modeLabel');
 const regValue = document.getElementById('regValue');
-const vinValue = document.getElementById('vinValue');
 const startBtn = document.getElementById('startBtn');
 const scanBtn = document.getElementById('scanBtn');
-const nextBtn = document.getElementById('nextBtn');
 const resetBtn = document.getElementById('resetBtn');
-const manualBtn = document.getElementById('manualBtn');
-const scanFrame = document.getElementById('scanFrame');
-const debugInfo = document.getElementById('debugInfo');
 const captureCanvas = document.getElementById('captureCanvas');
-const procCanvas = document.getElementById('procCanvas');
 
 let cameraReady = false;
-let ocrReady = false;
-let cvReady = false;
 let processing = false;
-let mode = 'REGISTRATION';
 let stream = null;
-let worker = null;
-let lastPlate = null;
 
 // ============================================================
-// 2. INICJALIZACJA OPENCV
-// ============================================================
-async function waitForOpenCV() {
-    try {
-        if (typeof cv === 'undefined') {
-            await new Promise(resolve => {
-                const check = setInterval(() => {
-                    if (typeof cv !== 'undefined') { clearInterval(check); resolve(); }
-                }, 100);
-            });
-        }
-        if (cv instanceof Promise) cv = await cv;
-        cvReady = true;
-        engineEl.innerText = '✅ OpenCV.js: gotowy';
-        console.log('OpenCV ready');
-    } catch (e) {
-        console.error('OpenCV init error', e);
-        engineEl.innerText = '❌ OpenCV.js: błąd (używam fallback)';
-    }
-}
-
-// ============================================================
-// 3. INICJALIZACJA TESSERACT (OPTIMALNE PARAMETRY)
-// ============================================================
-async function initOCR() {
-    try {
-        statusEl.innerText = '⏳ Ładowanie silnika OCR...';
-        
-        // Użyj Tesseract.js v4 z LSTM
-        worker = await Tesseract.createWorker('eng', 1, {
-            logger: m => {
-                if (m.status === 'recognizing text') {
-                    statusEl.innerText = '📖 Rozpoznawanie: ' + m.progress + '%';
-                }
-            }
-        });
-
-        // KLUCZOWE: Optymalne parametry dla tablic
-        await worker.setParameters({
-            // Tylko dozwolone znaki
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-            // Pojedynczy wiersz tekstu
-            tessedit_pageseg_mode: '7',
-            // Wyłącz dzielenie wyrazów
-            preserve_interword_spaces: '0',
-            // Wyłącz automatyczne korekty
-            tessedit_do_reroc: '0',
-            // Minimalna pewność do wyświetlenia
-            tessedit_min_confidence: '50',
-            // Skala obrazu (lepsza dla małych znaków)
-            image_default_resolution: '300'
-        });
-
-        ocrReady = true;
-        engineEl.innerText = '✅ Tesseract: gotowy (LSTM)';
-        statusEl.innerText = '✅ Gotowe. Ustaw tablicę w ramce.';
-        if (cameraReady) scanBtn.disabled = false;
-        
-    } catch (e) {
-        console.error('OCR init error', e);
-        statusEl.innerText = '❌ Błąd OCR. Spróbuj odświeżyć.';
-    }
-}
-
-// ============================================================
-// 4. KAMERA Z AUTOFOKUSEM
+// KAMERA
 // ============================================================
 async function startCamera() {
-    if (cameraReady) return;
-    try {
-        statusEl.innerText = '⏳ Uruchamianie kamery...';
-        
-        // Użyj niestandardowych constraintów dla lepszego autofokusa
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: 'environment',
-                width: { ideal: 1920 },
-                height: { ideal: 1080 },
-                aspectRatio: 16/9,
-                // Wymuś autofokus
-                focusMode: 'continuous',
-                advanced: [{ focusMode: 'continuous' }]
-            },
-            audio: false
-        });
-        
-        video.srcObject = stream;
-        await video.play();
-        
-        // Poczekaj na stabilizację autofokusa
-        await new Promise(r => setTimeout(r, 1500));
-        
-        cameraReady = true;
-        startBtn.style.display = 'none';
-        statusEl.innerText = '📷 Kamera gotowa.';
-        if (ocrReady) scanBtn.disabled = false;
-        
-    } catch (e) {
-        console.error('Camera error', e);
-        statusEl.innerText = '❌ Błąd kamery. Sprawdź uprawnienia.';
-        alert('Brak dostępu do kamery. Włącz uprawnienia w przeglądarce.');
+  if (cameraReady) return;
+  try {
+    statusEl.innerText = '⏳ Uruchamianie kamery...';
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        aspectRatio: 16/9
+      },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    cameraReady = true;
+    startBtn.style.display = 'none';
+    statusEl.innerText = '📷 Kamera gotowa.';
+    scanBtn.disabled = false;
+    engineEl.innerText = '✅ Gotowy do skanowania';
+  } catch (e) {
+    console.error('Camera error', e);
+    statusEl.innerText = '❌ Błąd kamery.';
+    alert('Brak dostępu do kamery.');
+  }
+}
+
+// ============================================================
+// POBRANIE KLATKI
+// ============================================================
+function captureFrame() {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return null;
+
+  const sx = Math.floor(vw * 0.05);
+  const sy = Math.floor(vh * 0.20);
+  const sw = Math.floor(vw * 0.90);
+  const sh = Math.floor(vh * 0.60);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = sw;
+  canvas.height = sh;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+  return canvas;
+}
+
+// ============================================================
+// SKANOWANIE PRZEZ OCR.SPACE
+// ============================================================
+async function scanWithOCRspace(imageCanvas) {
+  // Konwersja canvas do base64
+  const dataUrl = imageCanvas.toDataURL('image/jpeg', 0.95);
+  const base64Image = dataUrl.split(',')[1];
+
+  // Twój darmowy klucz API z OCR.space (zarejestruj się na https://ocr.space/OCRAPI)
+  const apiKey = 'K80970372488957'; // <-- ZASTĄP SWOIM KLIUCZEM (darmowy)
+  const apiUrl = 'https://api.ocr.space/parse/image';
+
+  const formData = new FormData();
+  formData.append('apikey', apiKey);
+  formData.append('base64Image', `data:image/jpeg;base64,${base64Image}`);
+  formData.append('language', 'eng');
+  formData.append('OCREngine', '2');  // 2 = najlepszy dla tablic
+  formData.append('scale', 'true');
+  formData.append('isTable', 'false');
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await response.json();
+    console.log('OCR.space response:', data);
+
+    if (data.IsErroredOnProcessing) {
+      throw new Error(data.ErrorMessage || 'Błąd OCR');
     }
-}
 
-// ============================================================
-// 5. POBRANIE KLATKI (WYSOKA ROZDZIELCZOŚĆ)
-// ============================================================
-function captureFrameFromVideo() {
-    const vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw || !vh) return null;
+    const parsedResults = data.ParsedResults || [];
+    if (parsedResults.length === 0) return null;
 
-    // Obszar skanowania: 5%-95% szerokości, 20%-80% wysokości
-    const sx = Math.floor(vw * 0.05);
-    const sy = Math.floor(vh * 0.20);
-    const sw = Math.floor(vw * 0.90);
-    const sh = Math.floor(vh * 0.60);
-
-    // Docelowa rozdzielczość (im więcej, tym lepiej)
-    const targetWidth = 2800;
-    const scale = targetWidth / sw;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(sw * scale);
-    canvas.height = Math.round(sh * scale);
-    const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-    return canvas;
-}
-
-// ============================================================
-// 6. OCENA OSTROŚCI (METODA LAPLACE'A)
-// ============================================================
-function sharpnessScore(canvas) {
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width, h = canvas.height;
-    const imageData = ctx.getImageData(0, 0, w, h);
-    const data = imageData.data;
-    let sum = 0, n = 0;
-    
-    // Używamy wariantu Laplace'a z 3x3
-    for (let y = 2; y < h-2; y++) {
-        for (let x = 2; x < w-2; x++) {
-            const idx = (y * w + x) * 4;
-            // Waga dla skali szarości
-            const g = 0.299 * data[idx] + 0.587 * data[idx+1] + 0.114 * data[idx+2];
-            
-            // Laplace operator: L = |8*g - (suma sąsiadów)|
-            const laplacian = Math.abs(
-                8 * g -
-                (0.299 * data[idx-4*w] + 0.587 * data[idx-4*w+1] + 0.114 * data[idx-4*w+2] +
-                 0.299 * data[idx-4] + 0.587 * data[idx-3] + 0.114 * data[idx-2] +
-                 0.299 * data[idx+4] + 0.587 * data[idx+5] + 0.114 * data[idx+6] +
-                 0.299 * data[idx+4*w] + 0.587 * data[idx+4*w+1] + 0.114 * data[idx+4*w+2] +
-                 0.299 * data[idx-4*w-4] + 0.587 * data[idx-4*w-3] + 0.114 * data[idx-4*w-2] +
-                 0.299 * data[idx+4*w-4] + 0.587 * data[idx+4*w-3] + 0.114 * data[idx+4*w-2] +
-                 0.299 * data[idx-4*w+4] + 0.587 * data[idx-4*w+5] + 0.114 * data[idx-4*w+6] +
-                 0.299 * data[idx+4*w+4] + 0.587 * data[idx+4*w+5] + 0.114 * data[idx+4*w+6])
-            );
-            
-            sum += laplacian;
-            n++;
-        }
+    let bestText = '';
+    let bestConfidence = 0;
+    for (const result of parsedResults) {
+      const text = result.ParsedText || '';
+      const confidence = parseFloat(result.TextOverlay?.Confidence || 0);
+      if (text && confidence > bestConfidence) {
+        bestConfidence = confidence;
+        bestText = text;
+      }
     }
-    return n ? sum / n : 0;
+
+    return { text: bestText, confidence: bestConfidence };
+  } catch (e) {
+    console.error('OCR.space error:', e);
+    throw e;
+  }
 }
 
 // ============================================================
-// 7. PRZETWARZANIE OPENCV (CLAHE + OTSU)
+// KOREKTA NUMERU
 // ============================================================
-function preprocessWithCV(srcCanvas) {
-    let src = null, gray = null, clahe = null, enhanced = null, binary = null, denoised = null;
-    try {
-        src = cv.imread(srcCanvas);
-        gray = new cv.Mat();
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
-        // 1. Usunięcie szumów (bilateral filter zachowuje krawędzie)
-        denoised = new cv.Mat();
-        cv.bilateralFilter(gray, denoised, 9, 75, 75);
-
-        // 2. CLAHE - wyrównanie kontrastu
-        clahe = new cv.CLAHE(3.0, new cv.Size(8, 8));
-        enhanced = new cv.Mat();
-        clahe.apply(denoised, enhanced);
-
-        // 3. Binaryzacja OTSU
-        binary = new cv.Mat();
-        cv.threshold(enhanced, binary, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
-
-        procCanvas.width = binary.cols;
-        procCanvas.height = binary.rows;
-        cv.imshow(procCanvas, binary);
-
-        const out = document.createElement('canvas');
-        out.width = binary.cols;
-        out.height = binary.rows;
-        out.getContext('2d').drawImage(procCanvas, 0, 0);
-        return out;
-    } finally {
-        if (src) src.delete();
-        if (gray) gray.delete();
-        if (denoised) denoised.delete();
-        if (clahe) clahe.delete();
-        if (enhanced) enhanced.delete();
-        if (binary) binary.delete();
-    }
-}
-
-// ============================================================
-// 8. OCR
-// ============================================================
-async function recognizePlate(canvas) {
-    const result = await worker.recognize(canvas);
-    const text = result?.data?.text || '';
-    const confidence = Number(result?.data?.confidence || 0);
-    return { raw: text, cleaned: cleanText(text), confidence };
-}
-
 function cleanText(t) {
-    return t.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return t.toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-// ============================================================
-// 9. KOREKTA NUMERU REJESTRACYJNEGO
-// ============================================================
 function correctPlate(s) {
-    if (!s || s.length < 4) return null;
-    let v = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (v.length < 4 || v.length > 8) return null;
+  if (!s || s.length < 4) return null;
+  let v = cleanText(s);
+  if (v.length < 4 || v.length > 8) return null;
 
-    let candidates = [];
-    
-    // Spróbuj różnych podziałów litera-cyfra
-    for (let prefLen = 1; prefLen <= Math.min(3, v.length - 2); prefLen++) {
-        let pref = v.substring(0, prefLen);
-        let rest = v.substring(prefLen);
-        
-        // Korekta typowych błędów OCR
-        pref = pref.replace(/0/g, 'O').replace(/1/g, 'I').replace(/2/g, 'Z').replace(/5/g, 'S');
-        rest = rest.replace(/O/g, '0').replace(/I/g, '1').replace(/Z/g, '2').replace(/S/g, '5').replace(/B/g, '8');
-        
-        if (/^[A-Z]{1,3}$/.test(pref) && /^[0-9]{3,5}$/.test(rest)) {
-            candidates.push(pref + rest);
-        }
+  let candidates = [];
+  for (let prefLen = 1; prefLen <= Math.min(3, v.length - 2); prefLen++) {
+    let pref = v.substring(0, prefLen);
+    let rest = v.substring(prefLen);
+    pref = pref.replace(/0/g, 'O').replace(/1/g, 'I').replace(/2/g, 'Z').replace(/5/g, 'S');
+    rest = rest.replace(/O/g, '0').replace(/I/g, '1').replace(/Z/g, '2').replace(/S/g, '5').replace(/B/g, '8');
+    if (/^[A-Z]{1,3}$/.test(pref) && /^[0-9]{3,5}$/.test(rest)) {
+      candidates.push(pref + rest);
     }
-    
-    if (candidates.length === 0) return null;
-    
-    // Sortuj według preferowanego formatu
-    const score = (c) => {
-        const p = c.match(/^[A-Z]+/)[0].length;
-        const n = c.length - p;
-        if (p === 2 && n === 5) return 100;  // Najczęstszy format
-        if (p === 2 && n === 4) return 90;
-        if (p === 3 && n === 4) return 80;
-        if (p === 2 && n === 3) return 70;
-        if (p === 1 && n === 5) return 60;
-        return 50;
-    };
-    
-    candidates.sort((a, b) => score(b) - score(a));
-    return candidates[0];
+  }
+  if (candidates.length === 0) return null;
+  
+  const score = (c) => {
+    const p = c.match(/^[A-Z]+/)[0].length;
+    const n = c.length - p;
+    if (p === 2 && n === 5) return 100;
+    if (p === 2 && n === 4) return 90;
+    if (p === 3 && n === 4) return 80;
+    if (p === 2 && n === 3) return 70;
+    if (p === 1 && n === 5) return 60;
+    return 50;
+  };
+  candidates.sort((a, b) => score(b) - score(a));
+  return candidates[0];
 }
 
 function formatPlate(v) {
-    if (!v) return null;
-    const pref = v.match(/^[A-Z]+/)[0];
-    const rest = v.substring(pref.length);
-    return pref + ' ' + rest;
+  if (!v) return null;
+  const pref = v.match(/^[A-Z]+/)[0];
+  const rest = v.substring(pref.length);
+  return pref + ' ' + rest;
 }
 
 // ============================================================
-// 10. KOREKTA VIN
+// GŁÓWNE SKANOWANIE
 // ============================================================
-function correctVIN(s) {
-    let v = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    
-    // VIN ma dokładnie 17 znaków
-    if (v.length === 18) {
-        // Spróbuj usunąć jeden znak
-        for (let i = 0; i < v.length; i++) {
-            const cand = v.substring(0, i) + v.substring(i + 1);
-            if (/^[A-HJ-NPR-Z0-9]{17}$/.test(cand)) { 
-                v = cand; 
-                break; 
-            }
-        }
+async function scan() {
+  if (processing || !cameraReady) return;
+  processing = true;
+  scanBtn.disabled = true;
+  statusEl.innerText = '📸 Pobieranie klatki...';
+
+  try {
+    const frame = captureFrame();
+    if (!frame) {
+      statusEl.innerText = '❌ Nie udało się pobrać klatki.';
+      return;
     }
-    
-    v = v.replace(/O/g, '0').replace(/I/g, '1').replace(/Q/g, '0');
-    
-    if (/^[A-HJ-NPR-Z0-9]{17}$/.test(v)) return v;
-    return null;
-}
 
-// ============================================================
-// 11. GŁÓWNE SKANOWANIE (WIELOKLATKOWE)
-// ============================================================
-async function scanMultipleFrames() {
-    if (processing || !cameraReady || !ocrReady) return;
-    processing = true;
-    scanBtn.disabled = true;
-    statusEl.innerText = '📸 Zbieranie klatek...';
+    statusEl.innerText = '📡 Wysyłanie do OCR.space...';
+    const result = await scanWithOCRspace(frame);
 
-    try {
-        // Zbierz 25 klatek (więcej = większa szansa na ostrą)
-        const frames = [];
-        for (let i = 0; i < 25; i++) {
-            const c = captureFrameFromVideo();
-            if (c) {
-                const score = sharpnessScore(c);
-                frames.push({ canvas: c, score });
-            }
-            await new Promise(r => setTimeout(r, 100));
-        }
-        
-        if (frames.length === 0) { 
-            statusEl.innerText = '❌ Nie udało się pobrać klatek.'; 
-            return; 
-        }
-
-        // Wybierz 7 najostrzejszych
-        frames.sort((a, b) => b.score - a.score);
-        const topFrames = frames.slice(0, 7);
-
-        statusEl.innerText = '🔍 Analizowanie...';
-        const allResults = [];
-
-        for (const f of topFrames) {
-            let processed;
-            if (cvReady) {
-                processed = preprocessWithCV(f.canvas);
-            } else {
-                processed = f.canvas;
-            }
-            const ocrResult = await recognizePlate(processed);
-            allResults.push({ ...ocrResult, sharpness: f.score });
-        }
-
-        // Wybierz najlepszy wynik
-        if (mode === 'REGISTRATION') {
-            const best = selectBestPlate(allResults);
-            if (best) {
-                lastPlate = best;
-                regValue.textContent = formatPlate(best);
-                regValue.className = 'value';
-                scanFrame.classList.add('scan-success');
-                setTimeout(() => scanFrame.classList.remove('scan-success'), 2000);
-                statusEl.textContent = '✅ Odczytano: ' + formatPlate(best);
-                nextBtn.style.display = 'inline-block';
-                manualBtn.style.display = 'inline-block';
-                scanBtn.style.display = 'none';
-            } else {
-                statusEl.textContent = '❌ Nie rozpoznano tablicy. Spróbuj ponownie.';
-                regValue.textContent = '—';
-                regValue.className = 'value placeholder';
-                // Pokaż debug
-                showDebug(allResults);
-            }
-        } else {
-            const best = selectBestVIN(allResults);
-            if (best) {
-                vinValue.textContent = best;
-                vinValue.className = 'value';
-                scanFrame.classList.add('scan-success');
-                setTimeout(() => scanFrame.classList.remove('scan-success'), 2000);
-                statusEl.textContent = '✅ VIN odczytany: ' + best;
-                scanBtn.style.display = 'none';
-                nextBtn.style.display = 'none';
-            } else {
-                statusEl.textContent = '❌ Nie rozpoznano VIN. Spróbuj ponownie.';
-                vinValue.textContent = '—';
-                vinValue.className = 'value placeholder';
-                showDebug(allResults);
-            }
-        }
-    } catch (e) {
-        console.error('Scan error', e);
-        statusEl.textContent = '❌ Błąd skanowania.';
-    } finally {
-        processing = false;
-        scanBtn.disabled = false;
+    if (!result || !result.text) {
+      statusEl.innerText = '❌ Nie rozpoznano tekstu. Spróbuj ponownie.';
+      regValue.textContent = '—';
+      regValue.className = 'value placeholder';
+      return;
     }
-}
 
-function selectBestPlate(results) {
-    const candidates = [];
-    for (const r of results) {
-        const corrected = correctPlate(r.cleaned);
-        if (!corrected) continue;
-        
-        let score = r.confidence || 0;
-        const p = corrected.match(/^[A-Z]+/)[0].length;
-        const n = corrected.length - p;
-        
-        // Premia za format
-        if (p === 2 && n === 5) score += 50;
-        else if (p === 2 && n === 4) score += 40;
-        else if (p === 3 && n === 4) score += 35;
-        else if (p === 2 && n === 3) score += 30;
-        else if (p === 1 && n === 5) score += 20;
-        
-        // Premia za ostrość
-        score += (r.sharpness || 0) * 0.002;
-        
-        candidates.push({ value: corrected, score, raw: r.raw });
+    const cleaned = cleanText(result.text);
+    const corrected = correctPlate(cleaned);
+    if (corrected) {
+      regValue.textContent = formatPlate(corrected);
+      regValue.className = 'value';
+      statusEl.innerText = `✅ Odczytano: ${formatPlate(corrected)} (pewność: ${Math.round(result.confidence)}%)`;
+    } else {
+      statusEl.innerText = `❌ Niepoprawny format: "${result.text}"`;
+      regValue.textContent = result.text;
+      regValue.className = 'value error';
     }
-    
-    if (candidates.length === 0) return null;
-    candidates.sort((a, b) => b.score - a.score);
-    
-    // Loguj najlepszy wynik
-    console.log('Best plate candidate:', candidates[0]);
-    return candidates[0].value;
-}
-
-function selectBestVIN(results) {
-    const candidates = [];
-    for (const r of results) {
-        const corrected = correctVIN(r.cleaned);
-        if (!corrected) continue;
-        let score = r.confidence || 0;
-        score += 50;
-        candidates.push({ value: corrected, score });
-    }
-    if (candidates.length === 0) return null;
-    candidates.sort((a, b) => b.score - a.score);
-    return candidates[0].value;
-}
-
-// ============================================================
-// 12. DEBUG
-// ============================================================
-function showDebug(results) {
-    debugInfo.style.display = 'block';
-    let html = '<strong>🔍 Surowe wyniki OCR:</strong><br>';
-    for (const r of results) {
-        html += `- "${r.raw}" (pewność: ${Math.round(r.confidence)}%)<br>`;
-    }
-    debugInfo.innerHTML = html;
-}
-
-// ============================================================
-// 13. RĘCZNA KOREKTA
-// ============================================================
-function manualCorrection() {
-    if (!lastPlate) return;
-    const newVal = prompt('Wprowadź poprawny numer rejestracyjny:', lastPlate);
-    if (newVal) {
-        const corrected = correctPlate(newVal);
-        if (corrected) {
-            regValue.textContent = formatPlate(corrected);
-            regValue.className = 'value';
-            statusEl.textContent = '✏️ Zaktualizowano ręcznie: ' + formatPlate(corrected);
-            nextBtn.style.display = 'inline-block';
-            scanBtn.style.display = 'none';
-            lastPlate = corrected;
-        } else {
-            alert('Nieprawidłowy format numeru.');
-        }
-    }
-}
-
-// ============================================================
-// 14. PRZEŁĄCZANIE TRYBÓW
-// ============================================================
-function switchToVIN() {
-    mode = 'VIN';
-    modeLabel.textContent = 'ETAP 2 — NUMER VIN';
-    modeLabel.style.background = '#1e293b';
-    modeLabel.style.color = '#60a5fa';
-    scanFrame.style.top = '16%';
-    scanFrame.style.height = '68%';
-    statusEl.textContent = '📌 Ustaw VIN w ramce.';
-    nextBtn.style.display = 'none';
-    scanBtn.style.display = 'inline-block';
+  } catch (e) {
+    console.error('Scan error', e);
+    statusEl.innerText = '❌ Błąd skanowania. Sprawdź klucz API.';
+  } finally {
+    processing = false;
     scanBtn.disabled = false;
-    manualBtn.style.display = 'none';
+  }
 }
 
+// ============================================================
+// RESET
+// ============================================================
 function resetAll() {
-    mode = 'REGISTRATION';
-    modeLabel.textContent = 'ETAP 1 — NUMER REJESTRACYJNY';
-    modeLabel.style.background = '#1a2a2a';
-    modeLabel.style.color = '#4ade80';
-    scanFrame.style.top = '22%';
-    scanFrame.style.height = '56%';
-    regValue.textContent = '—';
-    regValue.className = 'value placeholder';
-    vinValue.textContent = '—';
-    vinValue.className = 'value placeholder';
-    nextBtn.style.display = 'none';
-    manualBtn.style.display = 'none';
-    debugInfo.style.display = 'none';
-    scanBtn.style.display = 'inline-block';
-    if (cameraReady && ocrReady) scanBtn.disabled = false;
-    else scanBtn.disabled = true;
-    statusEl.textContent = '🔄 Zresetowano. Ustaw tablicę w ramce.';
-    lastPlate = null;
+  regValue.textContent = '—';
+  regValue.className = 'value placeholder';
+  statusEl.innerText = '🔄 Zresetowano. Ustaw tablicę w ramce.';
 }
 
 // ============================================================
-// 15. OBSŁUGA PRZYCISKÓW
+// OBSŁUGA PRZYCISKÓW
 // ============================================================
-startBtn.addEventListener('click', async () => {
-    await startCamera();
-    if (!ocrReady) {
-        await waitForOpenCV();
-        await initOCR();
-    }
-});
-
-scanBtn.addEventListener('click', scanMultipleFrames);
-nextBtn.addEventListener('click', switchToVIN);
+startBtn.addEventListener('click', startCamera);
+scanBtn.addEventListener('click', scan);
 resetBtn.addEventListener('click', resetAll);
-manualBtn.addEventListener('click', manualCorrection);
 
 // ============================================================
-// 16. START
+// START
 // ============================================================
-window.addEventListener('load', async () => {
-    await waitForOpenCV();
-    engineEl.textContent = cvReady ? '✅ OpenCV.js: gotowy' : '⚠️ OpenCV.js: niedostępny (używam fallback)';
-    statusEl.innerText = '▶️ Naciśnij „Uruchom kamerę”';
+window.addEventListener('load', () => {
+  engineEl.innerText = '⏳ Gotowy do pracy';
 });
 
-// Zatrzymaj zasoby przy zamknięciu
-window.addEventListener('beforeunload', async () => {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    if (worker) try { await worker.terminate(); } catch(e) {}
+window.addEventListener('beforeunload', () => {
+  if (stream) stream.getTracks().forEach(t => t.stop());
 });
 </script>
 </body>
