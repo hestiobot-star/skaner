@@ -3,285 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skaner Tablic Rejestracyjnych</title>
-    <!-- Biblioteka OCR Tesseract.js -->
+    <title>Skaner Numerów Pojazdów</title>
+    <!-- Ładowanie oficjalnej biblioteki Tesseract.js z zaufanego źródła CDN -->
     <script src="https://jsdelivr.net"></script>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: Arial, sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #f5f7fb;
-            color: #333;
-            display: flex;
-            justify-content: center;
+            background: #121212;
+            color: #ffffff;
+            text-align: center;
         }
-        .app-card {
-            background: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 8px 24px rgba(149, 157, 165, 0.2);
-            padding: 24px;
+        #container {
+            position: relative;
+            max-width: 640px;
+            margin: 0 auto;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        video {
             width: 100%;
-            max-width: 450px;
+            display: block;
+        }
+        /* Ramka celownika pomagająca użytkownikowi najechać na numer */
+        .scanner-laser {
+            position: absolute;
+            top: 40%;
+            left: 10%;
+            width: 80%;
+            height: 20%;
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 15px #00ff00;
+            border-radius: 8px;
+            pointer-events: none;
             box-sizing: border-box;
         }
-        h2 {
-            margin-top: 0;
-            text-align: center;
-            color: #1e293b;
-        }
-        .preview-container {
-            position: relative;
-            width: 100%;
-            height: 250px;
-            background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            margin-bottom: 16px;
-        }
-        video, img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        #filePreview {
-            display: none;
-        }
-        .btn {
-            background-color: #2563eb;
-            color: white;
-            border: none;
-            padding: 14px;
-            font-size: 16px;
-            font-weight: 600;
-            border-radius: 8px;
-            cursor: pointer;
-            width: 100%;
-            margin-bottom: 10px;
-            transition: background 0.2s;
-        }
-        .btn:hover { background-color: #1d4ed8; }
-        .btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
-        .btn-secondary {
-            background-color: #475569;
-        }
-        .btn-secondary:hover { background-color: #334155; }
-        
-        /* Stylizowany niewidzialny input dla pliku */
-        .file-input-wrapper {
-            position: relative;
-            overflow: hidden;
-            display: inline-block;
-            width: 100%;
-        }
-        .file-input-wrapper input[type=file] {
-            font-size: 100px;
-            position: absolute;
-            left: 0;
-            top: 0;
-            opacity: 0;
-            cursor: pointer;
-        }
-        
-        .status-box {
-            font-size: 14px;
-            text-align: center;
-            color: #64748b;
-            margin: 12px 0;
-            min-height: 20px;
-        }
-        .label-output {
+        #result-box {
             margin-top: 20px;
-            padding: 16px;
-            background: #eff6ff;
-            border: 2px solid #bfdbfe;
-            border-radius: 12px;
-            text-align: center;
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
         }
-        .label-output span {
-            display: block;
-            font-size: 12px;
-            text-transform: uppercase;
-            color: #1e40af;
-            font-weight: 600;
-            letter-spacing: 1px;
-            margin-bottom: 4px;
-        }
-        #resultLabel {
-            font-size: 28px;
-            font-weight: 800;
-            color: #1e3a8a;
-            letter-spacing: 3px;
-        }
+        .status { color: #aaa; font-style: italic; }
+        .number { font-size: 24px; font-weight: bold; color: #00ff00; margin-top: 10px; letter-spacing: 2px; }
+        canvas { display: none; } /* Ukryte przetwarzanie obrazu */
     </style>
 </head>
 <body>
 
-<div class="app-card">
-    <h2>Skaner Rejestracji</h2>
-    
-    <!-- Kontener podglądu (Kamera lub Zdjęcie) -->
-    <div class="preview-container">
-        <video id="video" autoplay playsinline></video>
-        <img id="filePreview" alt="Podgląd zdjęcia">
+    <h1>Skaner Numerów na Pojazdach</h1>
+    <p>Umieść numer rejestracyjny lub VIN wewnątrz zielonej ramki</p>
+
+    <div id="container">
+        <video id="webcam" autoplay playsinline muted></video>
+        <div class="scanner-laser"></div>
     </div>
 
-    <!-- Przyciski akcji -->
-    <button id="captureBtn" class="btn">Zeskanuj z kamery</button>
-    
-    <div class="file-input-wrapper">
-        <button class="btn btn-secondary">Wgraj zdjęcie z galerii</button>
-        <input type="file" id="fileInput" accept="image/*">
+    <div id="result-box">
+        <div id="status" class="status">Uruchamianie aparatu...</div>
+        <div id="ocr-result" class="number">- - - - - -</div>
     </div>
 
-    <div id="status" class="status-box">Inicjalizacja kamery...</div>
-
-    <!-- Główny label tekstowy (Wynik) -->
-    <div class="label-output">
-        <span>Odczytany numer tekstowy:</span>
-        <div id="resultLabel">-</div>
-    </div>
-    
-    <!-- Ukryty element do renderowania klatek w tle -->
-    <canvas id="canvas" style="display:none;"></canvas>
-</div>
+    <!-- Canvas do przetwarzania kontrastu klatek wideo -->
+    <canvas id="processing-canvas"></canvas>
 
 <script>
-    const video = document.getElementById('video');
-    const filePreview = document.getElementById('filePreview');
-    const fileInput = document.getElementById('fileInput');
-    const captureBtn = document.getElementById('captureBtn');
-    const resultLabel = document.getElementById('resultLabel');
-    const status = document.getElementById('status');
-    const canvas = document.getElementById('canvas');
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('processing-canvas');
+    const ctx = canvas.getContext('2d');
+    const statusText = document.getElementById('status');
+    const resultText = document.getElementById('ocr-result');
+    
+    let worker = null;
+    let isScanning = false;
 
-    let currentSource = 'camera'; // 'camera' lub 'file'
-
-    // 1. Uruchomienie kamery tylnej (Android)
-    function startCamera() {
-        navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment" }, 
-            audio: false 
-        })
-        .then(stream => {
-            video.srcObject = stream;
-            video.style.display = "block";
-            filePreview.style.display = "none";
-            currentSource = 'camera';
-            status.innerText = "Kamera aktywna. Skieruj na tablicę.";
-        })
-        .catch(err => {
-            console.error("Błąd kamery: ", err);
-            status.innerText = "Brak kamery. Wybierz zdjęcie z galerii.";
-            captureBtn.style.display = "none";
-        });
+    // 1. Inicjalizacja Silnika OCR Tesseract
+    async function initOCR() {
+        statusText.innerText = "Ładowanie silnika rozpoznawania tekstu...";
+        worker = await Tesseract.createWorker('pol+eng'); // Obsługa polskich i angielskich czcionek
+        statusText.innerText = "Skaner gotowy. Nakieruj na pojazd.";
+        isScanning = true;
+        startScanLoop();
     }
 
-    // Wywołanie startu kamery przy uruchomieniu
-    startCamera();
-
-    // 2. Obsługa wyboru pliku graficznego (Galeria/Pliki Androida)
-    fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            // Zatrzymaj strumień wideo jeśli działa, aby oszczędzać baterię
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-            }
-
-            filePreview.src = event.target.result;
-            video.style.display = "none";
-            filePreview.style.display = "block";
-            currentSource = 'file';
-            status.innerText = "Załadowano zdjęcie. Rozpoczynam analizę...";
+    // 2. Uruchomienie Kamery z optymalnymi parametrami dla pojazdów
+    async function startCamera() {
+        try {
+            const constraints = {
+                video: {
+                    facingMode: "environment", // Wymuszenie tylnej kamery w telefonie
+                    width: { ideal: 1920 },    // Wysoka jakość dla ostrego tekstu
+                    height: { ideal: 1080 },
+                    focusMode: "continuous"    // Próba wymuszenia ciągłego autofocusu
+                }
+            };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
             
-            // Automatyczne przetwarzanie po załadowaniu pliku
-            processImage(filePreview);
+            // Po uruchomieniu wideo, inicjalizuj tekst
+            video.onloadedmetadata = () => {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                initOCR();
+            };
+        } catch (err) {
+            statusText.innerText = "Błąd kamery: Brak uprawnień lub brak kamery w urządzeniu.";
+            console.error(err);
         }
-        reader.readAsDataURL(file);
-    });
+    }
 
-    // 3. Obsługa kliknięcia przycisku migawki kamery
-    captureBtn.addEventListener('click', () => {
-        if (currentSource !== 'camera') {
-            startCamera();
-            return;
+    // 3. Pętla przetwarzania obrazu i skanowania na żywo
+    async function startScanLoop() {
+        if (!isScanning) return;
+
+        // Kopiujemy tylko obszar z zielonej ramki (środek ekranu), aby przyspieszyć działanie
+        const sourceX = video.videoWidth * 0.1;
+        const sourceY = video.videoHeight * 0.4;
+        const sourceWidth = video.videoWidth * 0.8;
+        const sourceHeight = video.videoHeight * 0.2;
+
+        canvas.width = sourceWidth;
+        canvas.height = sourceHeight;
+
+        // Rysowanie kadru na ukrytym canvasie
+        ctx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+
+        // FILTR KONTRASTU: Przekształcenie obrazu na czarno-biały (Binaryzacja progowa)
+        // Ekstremalnie poprawia czytelność brudnych lub odblaskowych tablic rejestracyjnych
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            let brightness = 0.34 * data[i] + 0.5 * data[i + 1] + 0.16 * data[i + 2];
+            // Próg odcięcia: jeśli punkt jest ciemny -> zrób idealnie czarny, jeśli jasny -> idealnie biały
+            let threshold = 120; 
+            let color = brightness > threshold ? 255 : 0;
+            data[i] = color;     // R
+            data[i+1] = color;   // G
+            data[i+2] = color;   // B
         }
-        processImage(video);
-    });
+        ctx.putImageData(imgData, 0, 0);
 
-    // 4. Główna funkcja przetwarzania obrazu do formy tekstowej (OCR)
-    async function processImage(imageSource) {
-        status.innerText = "Przetwarzanie OCR...";
-        resultLabel.innerText = "-";
-        captureBtn.disabled = true;
-
-        const context = canvas.getContext('2d');
-        
-        // Pobieranie odpowiednich wymiarów w zależności od źródła
-        if (currentSource === 'camera') {
-            canvas.width = imageSource.videoWidth;
-            canvas.height = imageSource.videoHeight;
-            context.drawImage(imageSource, 0, 0, canvas.width, canvas.height);
-        } else {
-            // Dla obrazka z pliku musimy poczekać aż się załaduje gabarytowo
-            canvas.width = imageSource.naturalWidth;
-            canvas.height = imageSource.naturalHeight;
-            context.drawImage(imageSource, 0, 0, canvas.width, canvas.height);
-        }
+        // Pobranie przetworzonego obrazu jako bazy do odczytu tekstowego
+        const dataUrl = canvas.toDataURL('image/png');
 
         try {
-            // Konwersja canvas na format zrozumiały dla Tesseract
-            const dataUrl = canvas.toDataURL('image/jpeg');
+            statusText.innerText = "Analizowanie obrazu...";
+            const { data: { text } } = await worker.recognize(dataUrl);
             
-            const result = await Tesseract.recognize(dataUrl, 'eng', {
-                logger: m => {
-                    if (m.status === 'recognizing text') {
-                        status.innerText = `Analiza tekstu: ${Math.round(m.progress * 100)}%`;
-                    }
-                }
-            });
+            // Oczyszczanie wyniku ze znaków specjalnych, spacji i śmieci tekstowych
+            let cleanedText = text.replace(/[^A-Z0-9]/gi, '').toUpperCase();
 
-            // Obróbka i czyszczenie tekstu
-            let rawText = result.data.text;
-            // Usuń znaki interpunkcyjne, zostaw tylko litery i cyfry
-            let cleanText = rawText.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-
-            // Dopasowanie do formatu polskich tablic (szukamy ciągu 2-3 liter i 4-5 cyfr/liter)
-            // Wyciąga podciąg, który najbardziej przypomina rejestrację
-            const plateRegex = /[A-Z]{2,3}[0-9A-Z]{4,5}/g;
-            const matches = cleanText.match(plateRegex);
-
-            if (matches && matches.length > 0) {
-                resultLabel.innerText = matches[0]; // Pokazuje najlepiej dopasowany ciąg tekstowy
-                status.innerText = "Odczytano poprawnie!";
-            } else if (cleanText.length > 2) {
-                // Jeśli regex nie dopasował idealnie, ale coś wykryto - pokaż surowy oczyszczony tekst
-                resultLabel.innerText = cleanText.substring(0, 10);
-                status.innerText = "Wykryto tekst, zweryfikuj poprawność.";
+            if (cleanedText.length >= 4) { // Wyświetlaj tylko jeśli odczytano realną sekwencję znaków
+                resultText.innerText = cleanedText;
+                statusText.innerText = "Odczytano pomyślnie!";
             } else {
-                resultLabel.innerText = "Nie wykryto";
-                status.innerText = "Nie znaleziono numeru. Spróbuj pod innym kątem.";
+                statusText.innerText = "Szukam numerów... Dopasuj pozycję.";
             }
-
-        } catch (error) {
-            console.error(error);
-            status.innerText = "Błąd systemu OCR.";
-            resultLabel.innerText = "BŁĄD";
-        } finally {
-            captureBtn.disabled = false;
-            // Jeśli analizowaliśmy zdjęcie, przywróć tekst na przycisku zachęcający do powrotu do kamery
-            if (currentSource === 'file') {
-                captureBtn.innerText = "Przełącz na kamerę na żywo";
-            } else {
-                captureBtn.innerText = "Zeskanuj z kamery";
-            }
+        } catch (e) {
+            console.error(e);
         }
-    }
-</script>
 
+        // Odczekaj 500ms przed kolejną próbą, aby nie zawiesić telefonu/przeglądarki
+        setTimeout(startScanLoop, 500);
+    }
+
+    // Uruchomienie skanera po załadowaniu strony
+    window.addEventListener('DOMContentLoaded', startCamera);
+</script>
 </body>
 </html>
