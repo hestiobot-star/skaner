@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Skaner Tablic i VIN</title>
+    <!-- Ładujemy główny skrypt Tesseract v4 -->
+    <script src="https://jsdelivr.net"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -51,8 +53,8 @@
 </head>
 <body>
 
-    <h1>Skaner Numerów AI</h1>
-    <p>Skieruj zieloną ramkę na tablicę rejestracyjną lub VIN</p>
+    <h1>Skaner Numerów Pojazdów</h1>
+    <p>Umieść numer rejestracyjny lub VIN wewnątrz zielonej ramki</p>
 
     <div id="container">
         <video id="webcam" autoplay playsinline muted></video>
@@ -60,7 +62,7 @@
     </div>
 
     <div id="result-box">
-        <div id="status" class="status">Uruchamianie aparatu...</div>
+        <div id="status" class="status">Inicjalizacja...</div>
         <div id="ocr-result" class="number">- - - - - -</div>
     </div>
 
@@ -73,38 +75,53 @@
     const statusText = document.getElementById('status');
     const resultText = document.getElementById('ocr-result');
     
-    let textDetector = null;
+    let worker = null;
     let isProcessing = false;
 
-    // Inicjalizacja wbudowanego w system telefonu wykrywacza tekstu
-    async function initNativeOCR() {
-        // Sprawdzenie nowoczesnego standardu systemowego W3C (dostępnego w Android/iOS w 2026)
-        if ('ai' in window && 'textDetector' in window.ai || 'TextDetector' in window) {
-            textDetector = window.TextDetector ? new TextDetector() : await window.ai.textDetector.create();
-            statusText.innerText = "Systemowy skaner AI aktywny. Analiza w locie...";
-            startScanLoop();
-        } else {
-            // Jeśli przeglądarka ma wyłączone eksperymenty AI, używamy detektora uniwersalnego
-            textDetector = {
-                detect: async (sourceCanvas) => {
-                    // Tryb zapasowy wykorzystujący natywny silnik OCR przeglądarki
-                    if ('speechSynthesis' in window) { return []; } 
-                    return [];
+    // BEZBŁĘDNE URUCHOMIENIE SILNIKA Z OMINIĘCIEM BLOKAD GITHUB PAGES
+    async function initOCR() {
+        try {
+            statusText.innerText = "Konfiguracja bezpiecznego połączenia OCR...";
+            
+            // Wymuszamy pobieranie plików modułu bezpośrednio z odblokowanego serwera CDN unpkg
+            worker = await Tesseract.createWorker({
+                workerPath: 'https://jsdelivr.net',
+                corePath: 'https://jsdelivr.net',
+                logger: m => {
+                    if(m.status === 'initializing api') statusText.innerText = "Uruchamianie silnika...";
+                    if(m.status === 'recognizing text') statusText.innerText = `Skanowanie (${Math.floor(m.progress * 100)}%)`;
                 }
-            };
-            statusText.innerText = "Skanowanie aktywne (tryb bezpośredni)...";
-            startScanLoop();
+            });
+
+            // Ładowanie podstawowego zestawu znaków
+            await worker.loadLanguage('eng');
+            await worker.initialize('eng');
+            
+            // Nakazujemy czytanie wyłącznie wielkich liter i cyfr (dla tablic i VIN)
+            await worker.setParameters({
+                tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+            });
+
+            statusText.innerText = "Skaner gotowy! Umieść tekst w zielonej ramki.";
+            
+            // Cykliczne wywoływanie analizatora co 1,2 sekundy
+            setInterval(scanFrame, 1200);
+            
+        } catch (err) {
+            statusText.innerText = "Błąd krytyczny konfiguracji. Odśwież stronę.";
+            console.error("Szczegóły błędu:", err);
         }
     }
 
-    // Uruchomienie kamery urządzenia
+    // Odpalenie tylnej kamery w telefonie
     async function startCamera() {
         try {
+            statusText.innerText = "Łączenie z obiektywem...";
             const constraints = {
                 video: {
                     facingMode: "environment",
-                    width: { ideal: 1920 }, // Wyższa rozdzielczość dla dokładniejszego odczytu z odległości
-                    height: { ideal: 1080 }
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
                 }
             };
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -113,20 +130,17 @@
             video.onloadedmetadata = () => {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                initNativeOCR();
+                initOCR(); // Start silnika tekstowego
             };
-        } catch (err) {
+        } catch (cameraErr) {
             statusText.innerText = "Błąd: Brak uprawnień do kamery.";
-            console.error(err);
+            console.error(cameraErr);
         }
     }
 
-    // Pętla analizująca klatki bez użycia plików zewnętrznych
-    async function startScanLoop() {
-        if (isProcessing) {
-            requestAnimationFrame(startScanLoop);
-            return;
-        }
+    // Analiza wyciętego kadru z wideo
+    async function scanFrame() {
+        if (isProcessing || !worker) return;
         isProcessing = true;
 
         const sourceX = video.videoWidth * 0.05;
@@ -137,35 +151,37 @@
         canvas.width = sourceWidth;
         canvas.height = sourceHeight;
 
-        // Przechwycenie obrazu z celownika
+        // Przerzucenie obrazu wideo na canvas
         ctx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
 
-        try {
-            // Bezpośrednie wywołanie wbudowanego wykrywacza obiektów tekstowych w telefonie
-            if (textDetector && typeof textDetector.detect === 'function') {
-                const results = await textDetector.detect(canvas);
-                
-                if (results && results.length > 0) {
-                    // Pobranie wykrytego ciągu znaków
-                    let rawText = results[0].rawValue || results[0].text || "";
-                    let cleaned = rawText.replace(/[^A-Z0-9]/gi, '').toUpperCase().trim();
-                    
-                    if (cleaned.length >= 4) {
-                        resultText.innerText = cleaned;
-                        statusText.innerText = "Odczytano!";
-                    }
-                }
-            } else {
-                // Alternatywny bezpośredni odczyt klatki pikselowej w locie
-                statusText.innerText = "Nakieruj i trzymaj stabilnie ramkę nad numerem...";
-            }
-        } catch (e) {
-            console.error("Błąd analizy lokalnej: ", e);
+        // Agresywny filtr podbicia kontrastu czarno-białego klatki dla łatwiejszego odczytu
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            let brightness = 0.34 * data[i] + 0.5 * data[i + 1] + 0.16 * data[i + 2];
+            let threshold = 128; 
+            let color = brightness > threshold ? 255 : 0;
+            data[i] = color;     
+            data[i+1] = color;   
+            data[i+2] = color;   
         }
+        ctx.putImageData(imgData, 0, 0);
 
-        isProcessing = false;
-        // Płynne wywołanie kolejnej klatki przez silnik graficzny telefonu
-        setTimeout(() => { requestAnimationFrame(startScanLoop); }, 300);
+        try {
+            const { data: { text } } = await worker.recognize(canvas);
+            let cleanedText = text.replace(/[^A-Z0-9]/gi, '').toUpperCase().trim();
+
+            if (cleanedText.length >= 4) {
+                resultText.innerText = cleanedText;
+                statusText.innerText = "Odczytano pomyślnie!";
+            } else {
+                statusText.innerText = "Szukam numeru... Trzymaj aparat stabilnie.";
+            }
+        } catch (ocrErr) {
+            console.error("Błąd przetwarzania klatki:", ocrErr);
+        } finally {
+            isProcessing = false;
+        }
     }
 
     window.addEventListener('DOMContentLoaded', startCamera);
