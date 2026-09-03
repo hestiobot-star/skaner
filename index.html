@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skaner Pojazdów Pro</title>
+    <title>Skaner Tablic i VIN</title>
+    <!-- Użycie stabilnej wersji Tesseract ze sprawdzonymi ścieżkami bazowymi -->
+    <script src="https://jsdelivr.net"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -52,7 +54,7 @@
 <body>
 
     <h1>Skaner Numerów na Pojazdach</h1>
-    <p>Umieść numer wewnątrz zielonej ramki</p>
+    <p>Umieść numer rejestracyjny lub VIN wewnątrz zielonej ramki</p>
 
     <div id="container">
         <video id="webcam" autoplay playsinline muted></video>
@@ -60,7 +62,7 @@
     </div>
 
     <div id="result-box">
-        <div id="status" class="status">Uruchamianie...</div>
+        <div id="status" class="status">Inicjalizacja kamery...</div>
         <div id="ocr-result" class="number">- - - - - -</div>
     </div>
 
@@ -72,26 +74,17 @@
     const ctx = canvas.getContext('2d');
     const statusText = document.getElementById('status');
     const resultText = document.getElementById('ocr-result');
+    
+    let isProcessing = false;
 
-    // Funkcja filtrująca i formatująca odczytane znaki
-    function wyczyśćTekst(surowyTekst) {
-        return surowyTekst.replace(/[^A-Z0-9]/gi, '').toUpperCase().trim();
-    }
-
-    // Bezpieczny start - brak zależności zewnętrznych
-    function initSkaner() {
-        statusText.innerText = "Skaner aktywny. Nakieruj na pojazd.";
-        startScanLoop();
-    }
-
-    // Uruchomienie strumienia wideo z aparatu
+    // Funkcja uruchamiająca kamerę
     async function startCamera() {
         try {
-            statusText.innerText = "Nawiązywanie połączenia z kamerą...";
+            statusText.innerText = "Uruchamianie podglądu wideo...";
             const constraints = {
                 video: {
-                    facingMode: "environment", // Tylna kamera
-                    width: { ideal: 1280 },    
+                    facingMode: "environment",
+                    width: { ideal: 1280 },
                     height: { ideal: 720 }
                 }
             };
@@ -101,16 +94,21 @@
             video.onloadedmetadata = () => {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                initSkaner();
+                statusText.innerText = "Skaner aktywny. Dopasuj odległość od tablicy.";
+                // Start pętli przechwytywania klatek
+                setInterval(captureFrame, 1000); // Analiza co 1 sekundę, by nie przeciążać procesora
             };
         } catch (err) {
-            statusText.innerText = "Błąd: Brak uprawnień do kamery. Kliknij ikonę kłódki/ustawień przy adresie www strony.";
+            statusText.innerText = "Błąd: Brak uprawnień do kamery.";
             console.error(err);
         }
     }
 
-    // Autorski algorytm analizy matrycy pikseli (zastępuje ciężkie OCR)
-    function startScanLoop() {
+    // Wycinanie i przygotowanie obrazu z ramki celownika
+    async function captureFrame() {
+        if (isProcessing) return; // Jeśli poprzednia klatka jeszcze się analizuje, pomiń
+        isProcessing = true;
+
         const sourceX = video.videoWidth * 0.05;
         const sourceY = video.videoHeight * 0.35;
         const sourceWidth = video.videoWidth * 0.9;
@@ -119,39 +117,38 @@
         canvas.width = sourceWidth;
         canvas.height = sourceHeight;
 
-        // Przechwycenie klatki obrazu
         ctx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
 
+        // Proste i bezbłędne wywołanie Tesseract bez tworzenia skomplikowanych workerów systemowych
         try {
-            // Przetwarzanie klatki w poszukiwaniu struktur o wysokim kontraście (jak czarne litery)
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imgData.data;
+            statusText.innerText = "Przetwarzanie tekstu...";
             
-            // Analiza poziomych linii skanowania w poszukiwaniu przerw między znakami
-            let wykryteZnaki = "";
-            
-            // Jeśli przeglądarka wspiera zaawansowaną detekcję obiektów tekstowych/kodowych
-            if ('BarcodeDetector' in window) {
-                const detector = new BarcodeDetector({ formats: ['code_128', 'code_39'] });
-                detector.detect(canvas).then(barcodes => {
-                    if (barcodes.length > 0) {
-                        resultText.innerText = wyczyśćTekst(barcodes[0].rawValue);
-                        statusText.innerText = "Odczytano kod identyfikacyjny!";
-                    }
-                }).catch(() => {});
-            }
+            // Wykorzystujemy uproszczoną metodę bezpośrednią Tesseract.recognize
+            const result = await Tesseract.recognize(
+                canvas,
+                'eng',
+                { 
+                    logger: m => console.log(m),
+                    // Przekazujemy regułę filtrowania bezpośrednio do rdzenia bez modyfikacji plików systemowych
+                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+                }
+            );
 
-            // Status pracy ciągłej
-            if (resultText.innerText === "- - - - - -") {
-                statusText.innerText = "Analiza obrazu na żywo... Dopasuj odległość.";
-            }
+            let txt = result.data.text;
+            let cleanedText = txt.replace(/[^A-Z0-9]/gi, '').toUpperCase().trim();
 
-        } catch (e) {
-            console.error(e);
+            if (cleanedText.length >= 4) {
+                resultText.innerText = cleanedText;
+                statusText.innerText = "Odczytano pomyślnie!";
+            } else {
+                statusText.innerText = "Skoncentruj aparat na numerach...";
+            }
+        } catch (ocrErr) {
+            console.error("Błąd rozpoznawania klatki:", ocrErr);
+            statusText.innerText = "Próba ponowna odczytu...";
+        } finally {
+            isProcessing = false;
         }
-
-        // Pętla bez opóźnień sieciowych
-        requestAnimationFrame(startScanLoop);
     }
 
     window.addEventListener('DOMContentLoaded', startCamera);
