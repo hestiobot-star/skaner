@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Skaner Numerów Pojazdów</title>
-    <!-- Oficjalny i stabilny link do biblioteki Tesseract.js -->
+    <!-- Oficjalny stabilny link do najnowszej wersji Tesseract.js -->
     <script src="https://jsdelivr.net"></script>
     <style>
         body {
@@ -27,7 +27,6 @@
             width: 100%;
             display: block;
         }
-        /* Zielona ramka celownika */
         .scanner-laser {
             position: absolute;
             top: 35%;
@@ -63,7 +62,7 @@
     </div>
 
     <div id="result-box">
-        <div id="status" class="status">Inicjalizacja systemu...</div>
+        <div id="status" class="status">Inicjalizacja aparatu...</div>
         <div id="ocr-result" class="number">- - - - - -</div>
     </div>
 
@@ -79,25 +78,23 @@
     let worker = null;
     let isScanning = false;
 
-    // BŁYSKAWICZNE URUCHOMIENIE SILNIKA BEZ SŁOWNIKÓW
+    // NOWA SKŁADNIA ZGODNA Z TESSERACT.JS V5
     async function initOCR() {
         try {
-            statusText.innerText = "Uruchamianie szybkiego modułu znaków...";
+            statusText.innerText = "Uruchamianie modułu tekstu (v5)...";
             
-            // Wersja v5 pozwala na bezpośrednie przekazanie języka w createWorker
-            // Ładujemy tylko 'eng' bo tablice rejestracyjne nie mają polskich znaków typu Ł, Ż, Ę
-            worker = await Tesseract.createWorker('eng'); 
-            
-            // Wymuszamy na silniku, by rozpoznawał TYLKO wielkie litery i cyfry
-            await worker.setParameters({
-                tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+            // W v5 język oraz dodatkowe parametry (jak whitelist) podaje się od razu w createWorker
+            worker = await Tesseract.createWorker('eng', 1, {
+                workerOptions: {
+                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+                }
             });
 
             statusText.innerText = "Skaner gotowy! Nakieruj na pojazd.";
             isScanning = true;
             startScanLoop();
         } catch (ocrError) {
-            statusText.innerText = "Błąd wewnętrzny OCR. Odśwież stronę.";
+            statusText.innerText = "Blokada OCR. Sprawdź połączenie z siecią.";
             console.error(ocrError);
         }
     }
@@ -122,16 +119,15 @@
                 initOCR(); 
             };
         } catch (err) {
-            statusText.innerText = "Błąd: Brak uprawnień do kamery. Zezwól na dostęp w przeglądarce.";
+            statusText.innerText = "Błąd: Brak uprawnień do kamery. Zezwól na dostęp.";
             console.error(err);
         }
     }
 
-    // Ciągła analiza obrazu
+    // Ciągła analiza obrazu z zielonej ramki
     async function startScanLoop() {
         if (!isScanning) return;
 
-        // Pobieranie wyciętego kadru z zielonej ramki
         const sourceX = video.videoWidth * 0.05;
         const sourceY = video.videoHeight * 0.35;
         const sourceWidth = video.videoWidth * 0.9;
@@ -142,7 +138,7 @@
 
         ctx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
 
-        // Zaawansowany, agresywny filtr kontrastu (czysty czarno-biały obraz)
+        // Cyfrowe podbicie kontrastu
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imgData.data;
         for (let i = 0; i < data.length; i += 4) {
@@ -160,7 +156,7 @@
         try {
             const { data: { text } } = await worker.recognize(dataUrl);
             
-            // Usuwanie spacji i śmieci technicznych
+            // Czyszczenie tekstu z niepotrzebnych śmieci
             let cleanedText = text.replace(/[^A-Z0-9]/gi, '').toUpperCase().trim();
 
             if (cleanedText.length >= 4) { 
@@ -170,11 +166,11 @@
                 statusText.innerText = "Szukam numeru w ramce...";
             }
         } catch (e) {
-            console.error("Błąd klatki: ", e);
+            console.error("Błąd przetwarzania klatki: ", e);
         }
 
-        // Analiza co 500ms
-        setTimeout(startScanLoop, 500);
+        // Analiza co 600ms dla płynności urządzenia
+        setTimeout(startScanLoop, 600);
     }
 
     window.addEventListener('DOMContentLoaded', startCamera);
